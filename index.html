@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SnapNav – MVP</title>
+  <style>
+    /* Simple, clean styling */
+    :root { --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#60a5fa; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:16px 20px; border-bottom:1px solid #1f2937; display:flex; align-items:center; gap:12px; }
+    header h1 { font-size:18px; margin:0; letter-spacing:0.3px; }
+    main { display:grid; grid-template-columns: 360px 1fr; gap:16px; padding:16px; }
+    @media (max-width: 900px){ main { grid-template-columns: 1fr; } }
+    .card { background:var(--card); border:1px solid #1f2937; border-radius:14px; padding:14px; }
+    label { font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
+    input { width:100%; padding:10px 12px; border:1px solid #263246; border-radius:10px; background:#0b1327; color:var(--text); outline:none; }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(96,165,250,.2); }
+    .row { display:flex; gap:10px; align-items:center; }
+    .btn { margin-top:10px; background:var(--accent); color:#061021; border:none; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:600; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    #map { width:100%; height:420px; border-radius:12px; overflow:hidden; border:1px solid #1f2937; }
+    #steps { display:flex; flex-direction:column; gap:10px; max-height:55vh; overflow:auto; }
+    .step { display:grid; grid-template-columns: 160px 1fr; gap:10px; background:#0b1327; border:1px solid #1f2937; border-radius:12px; padding:10px; }
+    .step img { width:100%; height:110px; object-fit:cover; border-radius:10px; border:1px solid #1f2937; }
+    .muted { color:var(--muted); font-size:12px; }
+    footer { padding:10px 20px; color:var(--muted); font-size:12px; border-top:1px solid #1f2937; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #1f2937; background:#0b1327; color:var(--muted); font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SnapNav – Visual Navigation MVP</h1>
+    <span class="pill">Demo</span>
+  </header>
+
+  <main>
+    <!-- Controls -->
+    <section class="card" id="controls">
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div>
+          <label for="start">Start (type or use current location)</label>
+          <input id="start" placeholder="e.g. Trinity College Dublin" />
+          <button class="btn" id="useHere">Use my current location</button>
+          <div class="muted" id="startNote"></div>
+        </div>
+        <div>
+          <label for="dest">Destination</label>
+          <input id="dest" placeholder="e.g. DCU Library" />
+        </div>
+        <div class="row">
+          <button class="btn" id="routeBtn">Get walking route</button>
+        </div>
+        <p class="muted">This MVP shows a walking route and pairs key steps with Street View photos so you can follow buildings/landmarks instead of just a map.</p>
+      </div>
+    </section>
+
+    <!-- Map + Steps -->
+    <section class="card">
+      <div id="map"></div>
+      <h3 style="margin:12px 0 8px 0;">Visual Steps</h3>
+      <div id="steps" class="muted">Enter start + destination to see visual steps…</div>
+    </section>
+  </main>
+
+  <footer>
+    Uses Google Maps JavaScript API, Places API, Directions API, and Street View Static API. Replace <strong>YOUR_API_KEY</strong> below and restrict it to your GitHub Pages domain.
+  </footer>
+
+  <script>
+    // ====== CONFIG: Paste your Google API key in the script tag URL at the bottom of the file ======
+
+    // Global state
+    let map, directionsService, directionsRenderer, startAutocomplete, destAutocomplete;
+    let apiKey = "YOUR_API_KEY"; // Keep in sync with the key used in the <script src> below
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 53.3498, lng: -6.2603 }, // Dublin as a default
+        zoom: 13,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+
+      directionsService = new google.maps.DirectionsService();
+      directionsRenderer = new google.maps.DirectionsRenderer({ map });
+
+      // Autocomplete fields
+      const startInput = document.getElementById("start");
+      const destInput = document.getElementById("dest");
+      startAutocomplete = new google.maps.places.Autocomplete(startInput, { fields: ["place_id", "geometry", "name"] });
+      destAutocomplete = new google.maps.places.Autocomplete(destInput, { fields: ["place_id", "geometry", "name"] });
+
+      document.getElementById("routeBtn").addEventListener("click", buildRoute);
+      document.getElementById("useHere").addEventListener("click", useCurrentLocationAsStart);
+    }
+
+    function useCurrentLocationAsStart() {
+      const note = document.getElementById('startNote');
+      if (!navigator.geolocation) {
+        note.textContent = "Geolocation is not supported by your browser.";
+        return;
+      }
+      note.textContent = "Finding your location…";
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        const latlng = new google.maps.LatLng(latitude, longitude);
+        // Reverse geocode for a readable address (optional)
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ location: latlng }, (results, status) => {
+          if (status === "OK" && results[0]) {
+            document.getElementById('start').value = results[0].formatted_address;
+            note.textContent = "Using your current location.";
+          } else {
+            document.getElementById('start').value = `${latitude}, ${longitude}`;
+            note.textContent = "Using your current location (coordinates).";
+          }
+        });
+      }, err => {
+        note.textContent = "Couldn't get location (permission denied?).";
+      });
+    }
+
+    function buildRoute() {
+      const start = document.getElementById("start").value.trim();
+      const dest = document.getElementById("dest").value.trim();
+      const stepsEl = document.getElementById("steps");
+
+      if (!start || !dest) {
+        stepsEl.innerHTML = '<span class="muted">Please enter both start and destination.</span>';
+        return;
+      }
+
+      directionsService.route({
+        origin: start,
+        destination: dest,
+        travelMode: google.maps.TravelMode.WALKING,
+        provideRouteAlternatives: false,
+      }, (result, status) => {
+        if (status !== "OK") {
+          stepsEl.innerHTML = `<span class="muted">Routing error: ${status}</span>`;
+          return;
+        }
+
+        directionsRenderer.setDirections(result);
+
+        // Render visual steps using Street View images
+        const route = result.routes[0];
+        const legs = route.legs || [];
+        let html = "";
+        legs.forEach((leg, i) => {
+          leg.steps.forEach((step, idx) => {
+            // Use the end_location of each step for a Street View image
+            const lat = step.end_location.lat();
+            const lng = step.end_location.lng();
+            const size = "320x110"; // fits our card nicely
+            const heading = 0; // we let Google pick default; could compute from polyline for fancier version
+            const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&key=${apiKey}`;
+            // Fallback text (strip HTML from instructions)
+            const tmp = document.createElement('div');
+            tmp.innerHTML = step.instructions;
+            const cleanInstruction = tmp.textContent || tmp.innerText || "";
+
+            html += `
+              <div class="step">
+                <img src="${streetViewUrl}" alt="Step ${idx+1} preview" loading="lazy" />
+                <div>
+                  <div><strong>Step ${idx + 1}:</strong> ${cleanInstruction}</div>
+                  <div class="muted">${(step.distance?.text || "").toString()} • ${(step.duration?.text || "").toString()}</div>
+                </div>
+              </div>
+            `;
+          });
+        });
+
+        stepsEl.innerHTML = html || '<span class="muted">No steps returned.</span>';
+      });
+    }
+  </script>
+  <!-- IMPORTANT: Replace YOUR_API_KEY with your real key, and restrict it to your GitHub Pages domain. -->
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places&callback=initMap"></script>
+</body>
+</html>
