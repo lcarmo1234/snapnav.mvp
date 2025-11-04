@@ -118,10 +118,14 @@
     }
 
     // ===== Street View helpers for better images =====
-    function streetViewUrlAt(lat, lng, heading = 0, size = "320x110") {
+    function streetViewUrlAt(lat, lng, heading = 0, size = "320x110", panoId = null) {
       const fov = 90;  // wider view
       const pitch = 0; // level
+      if (panoId) {
+        return `https://maps.googleapis.com/maps/api/streetview?size=${size}&pano=${panoId}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`;
+      }
       return `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`;
+    }&location=${lat},${lng}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`;
     }
     function bearingFromTo(aLatLng, bLatLng){
       return google.maps.geometry.spherical.computeHeading(aLatLng, bLatLng);
@@ -157,41 +161,46 @@
 
       if(!start || !dest){ stepsEl.innerHTML='<span class="muted">Please enter start and destination.</span>'; return; }
 
-      const req = {
-        origin:start,
-        destination:dest,
-        travelMode: google.maps.TravelMode.TRANSIT,
-        transitOptions: {}
-      };
-
+      const req = { origin:start, destination:dest, travelMode: google.maps.TravelMode.TRANSIT, transitOptions: {} };
       if(pref==='FEWER_TRANSFERS' || pref==='LESS_WALKING'){
         req.transitOptions.routingPreference = google.maps.TransitRoutePreference[pref];
       }
-
       const dt = timeVal ? new Date(timeVal) : new Date();
       if(when==='arrive'){ req.transitOptions.arrivalTime = dt; }
       else if(when==='departAt'){ req.transitOptions.departureTime = dt; }
       else { req.transitOptions.departureTime = new Date(); }
 
-      directionsService.route(req, (result,status)=>{
+      directionsService.route(req, async (result,status)=>{
         if(status!=="OK"){ stepsEl.innerHTML = `<span class='muted'>Routing error: ${status}</span>`; return; }
         directionsRenderer.setDirections(result);
         const route = result.routes[0];
         const leg = route.legs[0];
         let html = "";
 
-        leg.steps.forEach((step, idx)=>{
-          // base defaults
+        // We'll use StreetViewService to find the nearest panorama (supports radius)
+        const svService = new google.maps.StreetViewService();
+
+        // Helper that returns a panoId near a LatLng
+        const findPanoId = (latLng) => new Promise((resolve) => {
+          svService.getPanorama({ location: latLng, radius: 150 }, (data, svStatus) => {
+            if (svStatus === google.maps.StreetViewStatus.OK && data?.location?.pano) {
+              resolve(data.location.pano);
+            } else {
+              resolve(null);
+            }
+          });
+        });
+
+        for (let idx = 0; idx < leg.steps.length; idx++){
+          const step = leg.steps[idx];
           let lat = step.end_location.lat();
           let lng = step.end_location.lng();
           let title = step.instructions.replace(/<[^>]*>?/gm,'');
           let subtitle = `${step.distance?.text||''} • ${step.duration?.text||''}`;
 
-          // Prefer transit stop for transit steps
           if(step.transit){
             const t = step.transit;
-            const dep = t.departure_stop; // {name, location}
-            const arr = t.arrival_stop;
+            const dep = t.departure_stop; const arr = t.arrival_stop;
             if(dep && dep.location){ lat = dep.location.lat(); lng = dep.location.lng(); }
             const line = t.line?.short_name || t.line?.name || 'Line';
             const headsign = t.headsign ? ` → ${t.headsign}` : '';
@@ -203,25 +212,28 @@
           // Try to face the direction of travel
           let heading = 0;
           try {
-            const a = step.start_location; // LatLng
-            const b = step.end_location;   // LatLng
+            const a = step.start_location; const b = step.end_location;
             if(a && b) heading = bearingFromTo(a, b);
           } catch(e) {}
 
-          const streetViewUrl = streetViewUrlAt(lat, lng, heading);
+          // NEW: try to fetch a panoId near this location (w/ radius)
+          const latLng = new google.maps.LatLng(lat, lng);
+          const panoId = await findPanoId(latLng);
+          const streetViewUrl = streetViewUrlAt(lat, lng, heading, "320x110", panoId);
 
           html += `
             <div class="step">
-              <img src="${streetViewUrl}" alt="Step ${idx+1} preview" loading="lazy"/>
+              <img src="${streetViewUrl}" alt="Step ${idx+1} preview" loading="lazy" onerror="this.replaceWith((()=>{const d=document.createElement('div');d.className='muted';d.style.padding='12px';d.style.border='1px solid #1f2937';d.style.borderRadius='10px';d.style.display='grid';d.style.placeItems='center';d.textContent='No Street View here';return d;})())"/>
               <div>
                 <div><strong>Step ${idx+1}:</strong> ${title}</div>
                 <div class="muted">${subtitle}</div>
               </div>
             </div>`;
-        });
+        }
 
         stepsEl.innerHTML = html || '<span class="muted">No steps returned.</span>';
       });
+    });
     }
 
     function listNearbyStops(){
