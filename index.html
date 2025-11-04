@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SnapNav – Transit MVP</title>
+  <title>SnapNav – Public Transport MVP</title>
   <style>
     :root{--bg:#0b1220;--card:#0f172a;--text:#e5e7eb;--muted:#94a3b8;--accent:#60a5fa;--ok:#22c55e;--warn:#f59e0b}
     *{box-sizing:border-box}
@@ -117,6 +117,16 @@
       document.getElementById('nearbyBtn').addEventListener('click', listNearbyStops);
     }
 
+    // ===== Street View helpers for better images =====
+    function streetViewUrlAt(lat, lng, heading = 0, size = "320x110") {
+      const fov = 90;  // wider view
+      const pitch = 0; // level
+      return `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`;
+    }
+    function bearingFromTo(aLatLng, bLatLng){
+      return google.maps.geometry.spherical.computeHeading(aLatLng, bLatLng);
+    }
+
     function useCurrentLocationAsStart(){
       const note = document.getElementById('startNote');
       if(!navigator.geolocation){ note.textContent='Geolocation not supported.'; return; }
@@ -171,12 +181,13 @@
         let html = "";
 
         leg.steps.forEach((step, idx)=>{
-          // Street View location: prefer transit stop/station if present
+          // base defaults
           let lat = step.end_location.lat();
           let lng = step.end_location.lng();
           let title = step.instructions.replace(/<[^>]*>?/gm,'');
           let subtitle = `${step.distance?.text||''} • ${step.duration?.text||''}`;
 
+          // Prefer transit stop for transit steps
           if(step.transit){
             const t = step.transit;
             const dep = t.departure_stop; // {name, location}
@@ -189,8 +200,15 @@
             subtitle = `${dep?.name||'Departure'} → ${arr?.name||'Arrival'} • ${stops}`;
           }
 
-          const size = '320x110';
-          const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&key=${apiKey}`;
+          // Try to face the direction of travel
+          let heading = 0;
+          try {
+            const a = step.start_location; // LatLng
+            const b = step.end_location;   // LatLng
+            if(a && b) heading = bearingFromTo(a, b);
+          } catch(e) {}
+
+          const streetViewUrl = streetViewUrlAt(lat, lng, heading);
 
           html += `
             <div class="step">
@@ -212,7 +230,6 @@
       if(!startVal){ output.textContent = 'Enter or set a start location first.'; return; }
 
       const service = new google.maps.places.PlacesService(map);
-      // Try to geocode the start text to a LatLng
       const geocoder = new google.maps.Geocoder();
       geocoder.geocode({address:startVal}, (results,status)=>{
         if(status!=="OK" || !results[0]){ output.textContent='Could not locate start.'; return; }
@@ -228,7 +245,8 @@
       });
     }
   </script>
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA&libraries=places&callback=initMap"></script>
+  <!-- Added geometry for heading computations -->
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA&libraries=places,geometry&callback=initMap"></script>
 </body>
 </html>
 
