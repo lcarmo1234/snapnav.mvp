@@ -2,33 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device=device-width, initial-scale=1" />
   <title>SnapNav – Public Transport MVP</title>
-  <!-- Connects to the stylesheet below (cache-busted so it always reloads) -->
-  <link rel="stylesheet" href="style.css?v=10" />
+  <link rel="stylesheet" href="style.css?v=20" />
 </head>
-<body>
+<body class="theme-dark">
+  <!-- Floating animated background -->
+  <canvas id="bg-orbs" aria-hidden="true"></canvas>
+
   <header>
-    <h1>SnapNav – Public Transport MVP</h1>
+    <h1 class="logo">SnapNav</h1>
     <span class="badge">Transit-first</span>
+    <div class="spacer"></div>
+    <button class="chip" id="toggleTheme" title="Toggle theme (L/D)">☀️/🌙</button>
   </header>
 
   <main>
     <!-- Controls -->
     <section class="card" id="controls">
-      <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="stack">
         <div>
           <label for="start">Start (type or use current location)</label>
           <input id="start" placeholder="e.g. O'Connell Street, Dublin" />
           <button class="btn" id="useHere">Use my current location</button>
           <div class="muted" id="startNote"></div>
         </div>
+
         <div>
           <label for="dest">Destination</label>
           <input id="dest" placeholder="e.g. Heuston Station" />
         </div>
+
         <div class="row">
-          <div style="flex:1;min-width:160px">
+          <div class="grow">
             <label for="pref">Transit preference</label>
             <select id="pref">
               <option value="default">Best route</option>
@@ -36,7 +42,7 @@
               <option value="LESS_WALKING">Less walking</option>
             </select>
           </div>
-          <div style="flex:1;min-width:160px">
+          <div class="grow">
             <label for="depart">When</label>
             <select id="depart">
               <option value="now">Leave now</option>
@@ -44,16 +50,18 @@
               <option value="departAt">Depart at… (uses time below)</option>
             </select>
           </div>
-          <div style="flex:1;min-width:160px">
+          <div class="grow">
             <label for="time">Time</label>
             <input id="time" type="datetime-local" />
           </div>
         </div>
+
         <div class="row">
           <button class="btn" id="routeBtn">Get transit route</button>
           <button class="btn secondary" id="nearbyBtn" title="Find nearby stops">Nearby stops</button>
         </div>
-        <p class="muted">This MVP prioritizes <strong>public transport</strong>. It fetches <em>transit</em> routes and shows visual step-cards with Street View at stops and stations.</p>
+
+        <p class="muted">Fetches <strong>TRANSIT</strong> routes and shows a visual timeline with Street View at key steps.</p>
         <div id="nearby" class="muted"></div>
       </div>
     </section>
@@ -61,28 +69,94 @@
     <!-- Map + Steps -->
     <section class="card">
       <div id="map"></div>
-      <h3 style="margin:12px 0 8px 0;">Visual Transit Steps</h3>
-      <div id="steps" class="muted">Enter start + destination to see transit steps…</div>
+      <h3 class="section-title">Visual Transit Timeline</h3>
+      <div id="steps" class="timeline muted">Enter start + destination to see transit steps…</div>
     </section>
   </main>
+
+  <!-- Quick actions dock -->
+  <div class="dock">
+    <button class="fab" id="fabLocate" title="Use my current location">📍</button>
+    <button class="fab" id="fabTop" title="Scroll to top">⬆️</button>
+  </div>
 
   <footer>
     Uses Google Maps JavaScript API, Places API, <strong>Directions API (TRANSIT)</strong>, and Street View Static API.
   </footer>
 
   <script>
-    // ====== CONFIG: your key goes here and in the script src below ======
+    // ===== CONFIG: your key (already used below in Maps loader) =====
     const apiKey = "AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA";
 
+    // ===== THEME TOGGLE =====
+    const toggleThemeBtn = document.getElementById('toggleTheme');
+    toggleThemeBtn?.addEventListener('click', ()=>{
+      const b = document.body;
+      b.classList.toggle('theme-dark');
+      b.classList.toggle('theme-light');
+      // store preference
+      localStorage.setItem('snapnav-theme', b.classList.contains('theme-dark') ? 'dark' : 'light');
+    });
+    // restore theme
+    (function(){
+      const saved = localStorage.getItem('snapnav-theme');
+      if(saved === 'light'){ document.body.classList.remove('theme-dark'); document.body.classList.add('theme-light'); }
+    })();
+
+    // ===== FLOATING ORBS BACKGROUND (tiny canvas animation) =====
+    (function(){
+      const canvas = document.getElementById('bg-orbs');
+      const ctx = canvas.getContext('2d');
+      let w, h, dpr, orbs;
+
+      function resize(){
+        dpr = window.devicePixelRatio || 1;
+        w = canvas.width  = innerWidth  * dpr;
+        h = canvas.height = innerHeight * dpr;
+        canvas.style.width  = innerWidth + 'px';
+        canvas.style.height = innerHeight + 'px';
+        // build orbs
+        const N = 16;
+        orbs = new Array(N).fill(0).map((_,i)=>({
+          x: Math.random()*w, y: Math.random()*h,
+          r: (20 + Math.random()*80) * dpr,
+          hue: 200 + Math.random()*80,
+          a: 0.06 + Math.random()*0.10,
+          vx: (Math.random()*0.6 - 0.3) * dpr,
+          vy: (Math.random()*0.6 - 0.3) * dpr,
+        }));
+      }
+      function tick(){
+        ctx.clearRect(0,0,w,h);
+        for(const o of orbs){
+          o.x += o.vx; o.y += o.vy;
+          if(o.x < -o.r) o.x = w + o.r;
+          if(o.x >  w+o.r) o.x = -o.r;
+          if(o.y < -o.r) o.y = h + o.r;
+          if(o.y >  h+o.r) o.y = -o.r;
+          const grad = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
+          grad.addColorStop(0, `hsla(${o.hue}, 85%, 60%, ${o.a})`);
+          grad.addColorStop(1, `hsla(${o.hue}, 85%, 60%, 0)`);
+          ctx.fillStyle = grad;
+          ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+        }
+        requestAnimationFrame(tick);
+      }
+      addEventListener('resize', resize);
+      resize(); tick();
+    })();
+
+    // ===== MAPS + TRANSIT =====
     let map, directionsService, directionsRenderer, startAutocomplete, destAutocomplete;
 
     function initMap(){
       map = new google.maps.Map(document.getElementById('map'),{
         center:{lat:53.3498,lng:-6.2603}, // Dublin
-        zoom:13, mapTypeControl:false, streetViewControl:false, fullscreenControl:false
+        zoom:13, mapTypeControl:false, streetViewControl:false, fullscreenControl:false,
+        styles: [ { featureType:"poi", stylers:[{visibility:"off"}] } ]
       });
       directionsService = new google.maps.DirectionsService();
-      directionsRenderer = new google.maps.DirectionsRenderer({map});
+      directionsRenderer = new google.maps.DirectionsRenderer({map, suppressMarkers:true, polylineOptions:{strokeColor:"#69a6ff"}});
 
       const startInput = document.getElementById('start');
       const destInput  = document.getElementById('dest');
@@ -92,10 +166,13 @@
       document.getElementById('routeBtn').addEventListener('click', buildTransitRoute);
       document.getElementById('useHere').addEventListener('click', useCurrentLocationAsStart);
       document.getElementById('nearbyBtn').addEventListener('click', listNearbyStops);
+
+      // Dock quick actions
+      document.getElementById('fabLocate').addEventListener('click', useCurrentLocationAsStart);
+      document.getElementById('fabTop').addEventListener('click', ()=>window.scrollTo({top:0, behavior:'smooth'}));
     }
 
-    // ===== Street View helpers for better images =====
-    function streetViewUrlAt(lat, lng, heading = 0, size = "320x120", panoId = null) {
+    function streetViewUrlAt(lat, lng, heading = 0, size = "340x140", panoId = null) {
       const fov = 90;  const pitch = 0;
       if (panoId) {
         return `https://maps.googleapis.com/maps/api/streetview?size=${size}&pano=${panoId}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`;
@@ -151,7 +228,6 @@
         const leg = result.routes[0].legs[0];
         let html = "";
 
-        // StreetViewService for nearest outdoor pano
         const sv = new google.maps.StreetViewService();
         const getPano = (latLng) => new Promise((resolve)=>{
           sv.getPanorama({ location: latLng, radius: 35, source: google.maps.StreetViewSource.OUTDOOR },
@@ -194,6 +270,7 @@
 
           html += `
             <div class="step ${isTransit ? 'transit' : 'walk'}">
+              <div class="node"></div>
               <div class="img-skel">
                 <img src="${img}" alt="Step ${i+1} preview" loading="lazy"
                      onload="this.parentElement.classList.remove('img-skel')"
@@ -231,6 +308,7 @@
       });
     }
   </script>
+
   <!-- Load Maps JS (with Places + Geometry) and start app -->
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA&libraries=places,geometry&callback=initMap"></script>
 </body>
