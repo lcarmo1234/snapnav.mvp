@@ -1,12 +1,9 @@
-body { outline: 4px solid hotpink !important; }
-
 /* =========================================================
-   SNAPNAV • Super-clean, modern transit UI (no HTML changes)
+   SNAPNAV • Super-clean, modern transit UI
    ========================================================= */
 
 /* THEME TOKENS */
 :root{
-  /* base */
   --bg: #060a16;
   --text: #eaf0ff;
   --muted: #9fb0cf;
@@ -14,40 +11,33 @@ body { outline: 4px solid hotpink !important; }
   --card: #0e1630;
   --elev: #121c3a;
 
-  /* accents */
   --accent: #69a6ff;   /* primary blue */
   --accent-2: #22d3ee; /* cyan (walking) */
   --ok: #22c55e;
   --warn: #f59e0b;
   --danger: #ef4444;
 
-  /* effects */
   --ring: rgba(105,166,255,.35);
   --shadow-lg: 0 18px 50px rgba(0,0,0,.35);
   --shadow-md: 0 10px 28px rgba(0,0,0,.28);
 }
 
-/* BACKGROUND: animated gradient + gentle noise overlay */
+/* BACKGROUND */
 html,body{height:100%}
 *{box-sizing:border-box}
 body{
-  margin:0;
-  color:var(--text);
+  margin:0; color:var(--text);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
   background:
     radial-gradient(1200px 600px at 10% -10%, #0e1f49 0%, transparent 55%),
     radial-gradient(900px 500px at 100% 0%, #132a63 0%, transparent 55%),
     linear-gradient(180deg, #060a16 0%, #0a1228 100%);
-  position:relative;
-  overflow-x:hidden;
+  position:relative; overflow-x:hidden;
 }
 body::after{
-  content:"";
-  position:fixed; inset:0;
-  pointer-events:none;
+  content:""; position:fixed; inset:0; pointer-events:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 40 40'%3E%3Cpath fill='%23ffffff0a' d='M0 0h1v1H0z'/%3E%3C/svg%3E");
-  opacity:.8;
-  mix-blend-mode:soft-light;
+  opacity:.8; mix-blend-mode:soft-light;
 }
 
 /* HEADER */
@@ -120,7 +110,7 @@ input:focus,select:focus{ border-color: var(--accent); box-shadow: 0 0 0 4px var
 }
 .step:hover{ border-color:#2b3b61; box-shadow: var(--shadow-lg); transform: translateY(-1px) }
 .step img{
-  width:100%; height:120px; object-fit:cover;
+  width:100%; height:140px; object-fit:cover;
   border-radius:12px; border:1px solid var(--border); background:#0b142a;
 }
 .step .title{ font-weight:800 }
@@ -128,13 +118,9 @@ input:focus,select:focus{ border-color: var(--accent); box-shadow: 0 0 0 4px var
 .step.walk{ border-left: 4px solid var(--accent-2) }
 .step.transit{ border-left: 4px solid var(--accent) }
 
-/* little emoji icons without HTML changes */
-.step.walk .title::before{
-  content:"🚶 "; opacity:.95; margin-right:2px;
-}
-.step.transit .title::before{
-  content:"🚌 "; opacity:.95; margin-right:2px;
-}
+/* small emoji icons auto */
+.step.walk .title::before{ content:"🚶 "; opacity:.95; margin-right:2px }
+.step.transit .title::before{ content:"🚌 "; opacity:.95; margin-right:2px }
 
 /* skeleton shimmer while images load */
 .img-skel{ position:relative; overflow:hidden }
@@ -150,7 +136,7 @@ h3{ margin:12px 0 8px 0; font-size:15px; letter-spacing:.2px }
 .muted{ color:var(--muted); font-size:12px }
 footer{ padding:12px 20px; color:var(--muted); font-size:12px; border-top:1px solid var(--border) }
 
-/* subtle “pulse” for Nearby stops to draw attention */
+/* pulse highlight on Nearby stops */
 #nearbyBtn{ position:relative; overflow:hidden }
 #nearbyBtn::after{
   content:""; position:absolute; inset:-2px;
