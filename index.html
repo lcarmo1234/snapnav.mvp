@@ -3,183 +3,232 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SnapNav – MVP</title>
+  <title>SnapNav – Transit MVP</title>
   <style>
-    /* Simple, clean styling */
-    :root { --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#60a5fa; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; background:var(--bg); color:var(--text); }
-    header { padding:16px 20px; border-bottom:1px solid #1f2937; display:flex; align-items:center; gap:12px; }
-    header h1 { font-size:18px; margin:0; letter-spacing:0.3px; }
-    main { display:grid; grid-template-columns: 360px 1fr; gap:16px; padding:16px; }
-    @media (max-width: 900px){ main { grid-template-columns: 1fr; } }
-    .card { background:var(--card); border:1px solid #1f2937; border-radius:14px; padding:14px; }
-    label { font-size:12px; color:var(--muted); display:block; margin-bottom:6px; }
-    input { width:100%; padding:10px 12px; border:1px solid #263246; border-radius:10px; background:#0b1327; color:var(--text); outline:none; }
-    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(96,165,250,.2); }
-    .row { display:flex; gap:10px; align-items:center; }
-    .btn { margin-top:10px; background:var(--accent); color:#061021; border:none; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:600; }
-    .btn:disabled { opacity:.5; cursor:not-allowed; }
-    #map { width:100%; height:420px; border-radius:12px; overflow:hidden; border:1px solid #1f2937; }
-    #steps { display:flex; flex-direction:column; gap:10px; max-height:55vh; overflow:auto; }
-    .step { display:grid; grid-template-columns: 160px 1fr; gap:10px; background:#0b1327; border:1px solid #1f2937; border-radius:12px; padding:10px; }
-    .step img { width:100%; height:110px; object-fit:cover; border-radius:10px; border:1px solid #1f2937; }
-    .muted { color:var(--muted); font-size:12px; }
-    footer { padding:10px 20px; color:var(--muted); font-size:12px; border-top:1px solid #1f2937; }
-    .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #1f2937; background:#0b1327; color:var(--muted); font-size:12px; }
+    :root{--bg:#0b1220;--card:#0f172a;--text:#e5e7eb;--muted:#94a3b8;--accent:#60a5fa;--ok:#22c55e;--warn:#f59e0b}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{padding:16px 20px;border-bottom:1px solid #1f2937;display:flex;align-items:center;gap:12px}
+    header h1{font-size:18px;margin:0}
+    main{display:grid;grid-template-columns:360px 1fr;gap:16px;padding:16px}
+    @media (max-width:900px){main{grid-template-columns:1fr}}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:14px;padding:14px}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    input,select{width:100%;padding:10px 12px;border:1px solid #263246;border-radius:10px;background:#0b1327;color:var(--text);outline:none}
+    input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(96,165,250,.2)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .btn{margin-top:10px;background:var(--accent);color:#061021;border:none;padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    #map{width:100%;height:420px;border-radius:12px;overflow:hidden;border:1px solid #1f2937}
+    #steps{display:flex;flex-direction:column;gap:10px;max-height:55vh;overflow:auto}
+    .step{display:grid;grid-template-columns:160px 1fr;gap:10px;background:#0b1327;border:1px solid #1f2937;border-radius:12px;padding:10px}
+    .step img{width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid #1f2937}
+    .muted{color:var(--muted);font-size:12px}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #1f2937;background:#0b1327;color:var(--muted);font-size:12px}
+    .line{font-weight:700}
+    .ok{color:var(--ok)}
+    .warn{color:var(--warn)}
   </style>
 </head>
 <body>
   <header>
-    <h1>SnapNav – Visual Navigation MVP</h1>
-    <span class="pill">Demo</span>
+    <h1>SnapNav – Public Transport MVP</h1>
+    <span class="badge">Transit-first</span>
   </header>
 
   <main>
     <!-- Controls -->
     <section class="card" id="controls">
-      <div style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex;flex-direction:column;gap:12px">
         <div>
           <label for="start">Start (type or use current location)</label>
-          <input id="start" placeholder="e.g. Trinity College Dublin" />
+          <input id="start" placeholder="e.g. O'Connell Street, Dublin" />
           <button class="btn" id="useHere">Use my current location</button>
           <div class="muted" id="startNote"></div>
         </div>
         <div>
           <label for="dest">Destination</label>
-          <input id="dest" placeholder="e.g. DCU Library" />
+          <input id="dest" placeholder="e.g. Heuston Station" />
         </div>
         <div class="row">
-          <button class="btn" id="routeBtn">Get walking route</button>
+          <div style="flex:1;min-width:160px">
+            <label for="pref">Transit preference</label>
+            <select id="pref">
+              <option value="default">Best route</option>
+              <option value="FEWER_TRANSFERS">Fewer transfers</option>
+              <option value="LESS_WALKING">Less walking</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:160px">
+            <label for="depart">When</label>
+            <select id="depart">
+              <option value="now">Leave now</option>
+              <option value="arrive">Arrive by… (uses time below)</option>
+              <option value="departAt">Depart at… (uses time below)</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:160px">
+            <label for="time">Time</label>
+            <input id="time" type="datetime-local" />
+          </div>
         </div>
-        <p class="muted">This MVP shows a walking route and pairs key steps with Street View photos so you can follow buildings/landmarks instead of just a map.</p>
+        <div class="row">
+          <button class="btn" id="routeBtn">Get transit route</button>
+          <button class="btn" id="nearbyBtn" title="Find nearby stops">Nearby stops</button>
+        </div>
+        <p class="muted">This MVP prioritizes <strong>public transport</strong>. It fetches <em>transit</em> routes and shows visual step-cards with Street View at stops and stations.</p>
+        <div id="nearby" class="muted"></div>
       </div>
     </section>
 
     <!-- Map + Steps -->
     <section class="card">
       <div id="map"></div>
-      <h3 style="margin:12px 0 8px 0;">Visual Steps</h3>
-      <div id="steps" class="muted">Enter start + destination to see visual steps…</div>
+      <h3 style="margin:12px 0 8px 0;">Visual Transit Steps</h3>
+      <div id="steps" class="muted">Enter start + destination to see transit steps…</div>
     </section>
   </main>
 
-  <footer>
-    Uses Google Maps JavaScript API, Places API, Directions API, and Street View Static API. Replace <strong>AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA</strong> below and restrict it to your GitHub Pages domain.
+  <footer style="padding:10px 20px;color:var(--muted);font-size:12px;border-top:1px solid #1f2937">
+    Uses Google Maps JavaScript API, Places API, <strong>Directions API (TRANSIT)</strong>, and Street View Static API.
   </footer>
 
   <script>
-    // ====== CONFIG: Paste your Google API key in the script tag URL at the bottom of the file ======
+    // ====== CONFIG: your key goes here and in the script src below ======
+    const apiKey = "AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA";
 
-    // Global state
     let map, directionsService, directionsRenderer, startAutocomplete, destAutocomplete;
-    let apiKey = "AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA"; // Keep in sync with the key used in the <script src> below
 
-    function initMap() {
-      map = new google.maps.Map(document.getElementById("map"), {
-        center: { lat: 53.3498, lng: -6.2603 }, // Dublin as a default
-        zoom: 13,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
+    function initMap(){
+      map = new google.maps.Map(document.getElementById('map'),{
+        center:{lat:53.3498,lng:-6.2603}, // Dublin
+        zoom:13, mapTypeControl:false, streetViewControl:false, fullscreenControl:false
       });
-
       directionsService = new google.maps.DirectionsService();
-      directionsRenderer = new google.maps.DirectionsRenderer({ map });
+      directionsRenderer = new google.maps.DirectionsRenderer({map});
 
-      // Autocomplete fields
-      const startInput = document.getElementById("start");
-      const destInput = document.getElementById("dest");
-      startAutocomplete = new google.maps.places.Autocomplete(startInput, { fields: ["place_id", "geometry", "name"] });
-      destAutocomplete = new google.maps.places.Autocomplete(destInput, { fields: ["place_id", "geometry", "name"] });
+      const startInput = document.getElementById('start');
+      const destInput  = document.getElementById('dest');
+      startAutocomplete = new google.maps.places.Autocomplete(startInput,{fields:["place_id","geometry","name"]});
+      destAutocomplete  = new google.maps.places.Autocomplete(destInput,{fields:["place_id","geometry","name"]});
 
-      document.getElementById("routeBtn").addEventListener("click", buildRoute);
-      document.getElementById("useHere").addEventListener("click", useCurrentLocationAsStart);
+      document.getElementById('routeBtn').addEventListener('click', buildTransitRoute);
+      document.getElementById('useHere').addEventListener('click', useCurrentLocationAsStart);
+      document.getElementById('nearbyBtn').addEventListener('click', listNearbyStops);
     }
 
-    function useCurrentLocationAsStart() {
+    function useCurrentLocationAsStart(){
       const note = document.getElementById('startNote');
-      if (!navigator.geolocation) {
-        note.textContent = "Geolocation is not supported by your browser.";
-        return;
-      }
-      note.textContent = "Finding your location…";
-      navigator.geolocation.getCurrentPosition(pos => {
-        const { latitude, longitude } = pos.coords;
+      if(!navigator.geolocation){ note.textContent='Geolocation not supported.'; return; }
+      note.textContent='Finding your location…';
+      navigator.geolocation.getCurrentPosition(pos=>{
+        const {latitude, longitude} = pos.coords;
         const latlng = new google.maps.LatLng(latitude, longitude);
-        // Reverse geocode for a readable address (optional)
         const geocoder = new google.maps.Geocoder();
-        geocoder.geocode({ location: latlng }, (results, status) => {
-          if (status === "OK" && results[0]) {
+        geocoder.geocode({location:latlng},(results,status)=>{
+          if(status==='OK' && results[0]){
             document.getElementById('start').value = results[0].formatted_address;
-            note.textContent = "Using your current location.";
-          } else {
+            note.textContent='Using your current location.';
+          }else{
             document.getElementById('start').value = `${latitude}, ${longitude}`;
-            note.textContent = "Using your current location (coordinates).";
+            note.textContent='Using your coordinates.';
           }
         });
-      }, err => {
-        note.textContent = "Couldn't get location (permission denied?).";
-      });
+      },err=>{ note.textContent = "Couldn't get location (permission denied?)."; });
     }
 
-    function buildRoute() {
-      const start = document.getElementById("start").value.trim();
-      const dest = document.getElementById("dest").value.trim();
-      const stepsEl = document.getElementById("steps");
+    function buildTransitRoute(){
+      const start = document.getElementById('start').value.trim();
+      const dest  = document.getElementById('dest').value.trim();
+      const pref  = document.getElementById('pref').value;
+      const when  = document.getElementById('depart').value;
+      const timeVal = document.getElementById('time').value;
+      const stepsEl = document.getElementById('steps');
 
-      if (!start || !dest) {
-        stepsEl.innerHTML = '<span class="muted">Please enter both start and destination.</span>';
-        return;
+      if(!start || !dest){ stepsEl.innerHTML='<span class="muted">Please enter start and destination.</span>'; return; }
+
+      const req = {
+        origin:start,
+        destination:dest,
+        travelMode: google.maps.TravelMode.TRANSIT,
+        transitOptions: {}
+      };
+
+      if(pref==='FEWER_TRANSFERS' || pref==='LESS_WALKING'){
+        req.transitOptions.routingPreference = google.maps.TransitRoutePreference[pref];
       }
 
-      directionsService.route({
-        origin: start,
-        destination: dest,
-        travelMode: google.maps.TravelMode.WALKING,
-        provideRouteAlternatives: false,
-      }, (result, status) => {
-        if (status !== "OK") {
-          stepsEl.innerHTML = `<span class="muted">Routing error: ${status}</span>`;
-          return;
-        }
+      const dt = timeVal ? new Date(timeVal) : new Date();
+      if(when==='arrive'){ req.transitOptions.arrivalTime = dt; }
+      else if(when==='departAt'){ req.transitOptions.departureTime = dt; }
+      else { req.transitOptions.departureTime = new Date(); }
 
+      directionsService.route(req, (result,status)=>{
+        if(status!=="OK"){ stepsEl.innerHTML = `<span class='muted'>Routing error: ${status}</span>`; return; }
         directionsRenderer.setDirections(result);
-
-        // Render visual steps using Street View images
         const route = result.routes[0];
-        const legs = route.legs || [];
+        const leg = route.legs[0];
         let html = "";
-        legs.forEach((leg, i) => {
-          leg.steps.forEach((step, idx) => {
-            // Use the end_location of each step for a Street View image
-            const lat = step.end_location.lat();
-            const lng = step.end_location.lng();
-            const size = "320x110"; // fits our card nicely
-            const heading = 0; // we let Google pick default; could compute from polyline for fancier version
-            const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&key=${apiKey}`;
-            // Fallback text (strip HTML from instructions)
-            const tmp = document.createElement('div');
-            tmp.innerHTML = step.instructions;
-            const cleanInstruction = tmp.textContent || tmp.innerText || "";
 
-            html += `
-              <div class="step">
-                <img src="${streetViewUrl}" alt="Step ${idx+1} preview" loading="lazy" />
-                <div>
-                  <div><strong>Step ${idx + 1}:</strong> ${cleanInstruction}</div>
-                  <div class="muted">${(step.distance?.text || "").toString()} • ${(step.duration?.text || "").toString()}</div>
-                </div>
+        leg.steps.forEach((step, idx)=>{
+          // Street View location: prefer transit stop/station if present
+          let lat = step.end_location.lat();
+          let lng = step.end_location.lng();
+          let title = step.instructions.replace(/<[^>]*>?/gm,'');
+          let subtitle = `${step.distance?.text||''} • ${step.duration?.text||''}`;
+
+          if(step.transit){
+            const t = step.transit;
+            const dep = t.departure_stop; // {name, location}
+            const arr = t.arrival_stop;
+            if(dep && dep.location){ lat = dep.location.lat(); lng = dep.location.lng(); }
+            const line = t.line?.short_name || t.line?.name || 'Line';
+            const headsign = t.headsign ? ` → ${t.headsign}` : '';
+            const stops = t.num_stops ? `${t.num_stops} stops` : '';
+            title = `Take <span class='line'>${line}</span>${headsign}`;
+            subtitle = `${dep?.name||'Departure'} → ${arr?.name||'Arrival'} • ${stops}`;
+          }
+
+          const size = '320x110';
+          const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&key=${apiKey}`;
+
+          html += `
+            <div class="step">
+              <img src="${streetViewUrl}" alt="Step ${idx+1} preview" loading="lazy"/>
+              <div>
+                <div><strong>Step ${idx+1}:</strong> ${title}</div>
+                <div class="muted">${subtitle}</div>
               </div>
-            `;
-          });
+            </div>`;
         });
 
         stepsEl.innerHTML = html || '<span class="muted">No steps returned.</span>';
       });
     }
+
+    function listNearbyStops(){
+      const output = document.getElementById('nearby');
+      const startVal = document.getElementById('start').value.trim();
+      if(!startVal){ output.textContent = 'Enter or set a start location first.'; return; }
+
+      const service = new google.maps.places.PlacesService(map);
+      // Try to geocode the start text to a LatLng
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({address:startVal}, (results,status)=>{
+        if(status!=="OK" || !results[0]){ output.textContent='Could not locate start.'; return; }
+        const loc = results[0].geometry.location;
+        map.setCenter(loc); map.setZoom(15);
+
+        const request = { location: loc, radius: 800, type: ['transit_station'] };
+        service.nearbySearch(request,(places, ps)=>{
+          if(ps!==google.maps.places.PlacesServiceStatus.OK || !places?.length){ output.textContent='No nearby stops within 800m.'; return; }
+          const top = places.slice(0,8).map(p=>`• ${p.name}`).join('<br>');
+          output.innerHTML = `<strong>Nearby stops (≤800m):</strong><br>${top}`;
+        });
+      });
+    }
   </script>
-  <!-- IMPORTANT: Replace AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA with your real key, and restrict it to your GitHub Pages domain. -->
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA&libraries=places&callback=initMap"></script>
 </body>
 </html>
+
