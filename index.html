@@ -1,3 +1,5 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -207,12 +209,15 @@
           const streetViewUrl = streetViewUrlAt(lat, lng, heading, "320x110", panoId);
 
           html += `
-            <div class="step">
-              <img src="${streetViewUrl}" alt="Step ${idx+1} preview" loading="lazy"
-                   onerror="this.replaceWith((()=>{const d=document.createElement('div');d.className='muted';d.style.padding='12px';d.style.border='1px solid #1f2937';d.style.borderRadius='10px';d.style.display='grid';d.style.placeItems='center';d.textContent='No Street View here';return d;})())"/>
+            <div class="step ${step && step.transit ? 'transit' : 'walk'}">
+              <div class="img-skel">
+                <img src="${streetViewUrl}" alt="Step ${idx+1} preview" loading="lazy"
+                     onload="this.parentElement.classList.remove('img-skel')"
+                     onerror="this.replaceWith((()=>{const d=document.createElement('div');d.className='muted';d.style.padding='12px';d.style.border='1px solid #1f2937';d.style.borderRadius='10px';d.style.display='grid';d.style.placeItems='center';d.textContent='No Street View here';return d;})())"/>
+              </div>
               <div>
-                <div><strong>Step ${idx+1}:</strong> ${title}</div>
-                <div class="muted">${subtitle}</div>
+                <div class="title"><strong>Step ${idx+1}:</strong> ${title}</div>
+                <div class="subtitle">${subtitle}</div>
               </div>
             </div>`;
         }
