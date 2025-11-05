@@ -72,25 +72,14 @@
               <option value="FEWER_TRANSFERS">Fewer transfers</option>
               <option value="LESS_WALKING">Less walking</option>
             </select>
-          </div>
-          <div class="grow">
-            <label for="depart">When</label>
-            <select id="depart">
-            <select id="depart" name="depart">
-              <option value="now">Leave now</option>
-              <option value="arrive">Arrive by…</option>
-              <option value="departAt">Depart at…</option>
-            </select>
-          </div>
+              </div>
           <div class="grow">
             <label for="time">Time</label>
             <input id="time" type="datetime-local" />
-            <input id="time" name="time" type="datetime-local" />
           </div>
         </div>
 
         <div class="filters">
-        <div class="filters" role="group" aria-label="Step filters">
           <span class="muted">Show:</span>
           <label class="toggle"><input type="checkbox" id="filterWalk" checked /> Walking</label>
           <label class="toggle"><input type="checkbox" id="filterTransit" checked /> Transit</label>
@@ -99,21 +88,22 @@
         <div class="row">
           <button class="btn" id="routeBtn">Get transit route</button>
           <button class="btn secondary" id="nearbyBtn">Nearby stops</button>
-          <button class="btn" type="button" id="routeBtn">Get transit route</button>
-          <button class="btn secondary" type="button" id="nearbyBtn">Nearby stops</button>
         </div>
 
         <p class="muted">Shows Street View for each step and tells you where the bus stop is.</p>
         <div id="nearby" class="muted"></div>
-        <div id="nearby" class="muted" aria-live="polite"></div>
       </div>
     </section>
 
     <section class="card">
       <div id="map"></div>
+      <div id="routeSummary" class="summary muted">Enter start + destination to see route highlights…</div>
+      <div class="summary-actions">
+        <button class="chip" id="copySummary" title="Copy overview">Copy overview</button>
+        <button class="chip" id="previewTrip" title="Open an immersive Street View tour (press → to advance)" disabled>Street View tour</button>
+      </div>
       <h3 class="section-title">Visual Transit Timeline</h3>
       <div id="steps" class="timeline muted">Enter start + destination to see transit steps…</div>
-      <div id="steps" class="timeline muted" aria-live="polite">Enter start + destination to see transit steps…</div>
     </section>
   </main>
 
@@ -121,10 +111,20 @@
     Uses Google Maps JavaScript API, Places API, Directions (Transit) & Street View Static API.
   </footer>
 
+  <div id="svLightbox" class="lightbox" role="dialog" aria-modal="true" aria-labelledby="svMeta" aria-hidden="true">
+    <div class="lightbox-backdrop" id="svBackdrop"></div>
+    <div class="lightbox-body">
+      <button class="chip close" id="svClose" aria-label="Close Street View">✕ Close</button>
+      <iframe id="svFrame" title="Street View preview" loading="lazy" allowfullscreen></iframe>
+      <div id="svMeta" class="muted"></div>
+    </div>
+  </div>
+
   <script>
     // ==== CONFIG
     const apiKey = "AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA"; // your key
     let map, directionsService, directionsRenderer, lastSteps = [];
+    let map, directionsService, directionsRenderer, lastSteps = [], lastSummaryText = "";
 
     // ===== Theme + background orbs
     document.addEventListener("DOMContentLoaded", () => {
@@ -132,41 +132,10 @@
         const b = document.body;
         b.classList.toggle("theme-dark");
         b.classList.toggle("theme-light");
-      const body = document.body;
-      let storedTheme = null;
-      try { storedTheme = localStorage.getItem("snapnav-theme"); } catch (err) { storedTheme = null; }
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      if (storedTheme === "light" || (!storedTheme && !prefersDark)) {
-        body.classList.remove("theme-dark");
-        body.classList.add("theme-light");
-      }
-
-      const themeButton = document.getElementById("toggleTheme");
-      const syncThemeButton = () => themeButton.setAttribute("aria-pressed", body.classList.contains("theme-light"));
-
-      const toggleTheme = () => {
-        body.classList.toggle("theme-dark");
-        body.classList.toggle("theme-light");
-        const next = body.classList.contains("theme-light") ? "light" : "dark";
-        try { localStorage.setItem("snapnav-theme", next); } catch (err) {}
-        syncThemeButton();
-      };
-      themeButton.addEventListener("click", toggleTheme);
-      syncThemeButton();
-
-      document.querySelectorAll(".qs").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const target = document.getElementById(btn.dataset.target);
-          if (target) {
-            target.value = btn.dataset.value || "";
-            target.focus();
-          }
-        });
       });
 
       const canvas = document.getElementById("bg-orbs");
       const ctx = canvas.getContext("2d");
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       let w, h, orbs=[];
       function resize() {
         const dpr = window.devicePixelRatio || 1;
@@ -180,30 +149,12 @@
         }));
       }
       function tick(){
-        if (reduceMotion.matches) { ctx.clearRect(0,0,w,h); return; }
         ctx.clearRect(0,0,w,h);
-        for(const o of orbs){
-          o.x+=o.vx; o.y+=o.vy;
-          if(o.x<-o.r) o.x=w+o.r; if(o.x>w+o.r) o.x=-o.r;
-          if(o.y<-o.r) o.y=h+o.r; if(o.y>h+o.r) o.y=-o.r;
-          const g=ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,o.r);
-          g.addColorStop(0,`hsla(${o.hue},85%,60%,${o.a})`);
-          g.addColorStop(1,`hsla(${o.hue},85%,60%,0)`);
-          ctx.fillStyle=g; ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,Math.PI*2); ctx.fill();
-        }
+@@ -137,188 +151,377 @@
         requestAnimationFrame(tick);
       }
       addEventListener("resize",resize);
       resize(); tick();
-      resize();
-      tick();
-
-      const handleMotionChange = () => {
-        if (!reduceMotion.matches) requestAnimationFrame(tick);
-        else ctx.clearRect(0,0,w,h);
-      };
-      if (typeof reduceMotion.addEventListener === "function") reduceMotion.addEventListener("change", handleMotionChange);
-      else if (typeof reduceMotion.addListener === "function") reduceMotion.addListener(handleMotionChange);
     });
 
     // ===== Map init
@@ -225,13 +176,15 @@
         const t = a.value; a.value = b.value; b.value = t;
       };
       document.getElementById("nearbyBtn").onclick = listNearbyStops;
+      document.getElementById("copySummary").onclick = copySummaryToClipboard;
+      document.getElementById("previewTrip").onclick = playStreetViewTour;
 
       // filter checkboxes re-render
       document.getElementById("filterWalk").addEventListener("change", renderStepsFromCache);
       document.getElementById("filterTransit").addEventListener("change", renderStepsFromCache);
-    }
 
-    window.initMap = initMap;
+      setupLightbox();
+    }
 
     // ===== Utilities
     function useCurrentLocation(){
@@ -254,7 +207,331 @@
         ?`https://maps.googleapis.com/maps/api/streetview?size=380x160&pano=${pano}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`
         :`https://maps.googleapis.com/maps/api/streetview?size=380x160&location=${lat},${lng}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`;
     }
+    function svEmbedUrl(step){
+      const base = "https://www.google.com/maps/embed/v1/streetview";
+      if(step.panoId){
+        return `${base}?key=${apiKey}&pano=${step.panoId}&heading=${step.heading}&pitch=0&fov=90`;
+      }
+      if(step.lat!=null && step.lng!=null){
+        return `${base}?key=${apiKey}&location=${step.lat},${step.lng}&heading=${step.heading}&pitch=0&fov=90`;
+      }
+      return "";
+    }
     function dirWord(deg){
       let d=((deg+540)%360)-180, ad=Math.abs(d);
       if(ad<=20)return{w:"ahead",a:"⬆︎"}; if(ad<=60)return{w:d>0?"slightly right":"slightly left",a:d>0?"↗︎":"↖︎"};
       if(ad<=120)return{w:d>0?"to the right":"to the left",a:d>0?"→":"←"}; if(ad<=160)return{w:d>0?"back-right":"back-left",a:d>0?"↘︎":"↙︎"};
+      return{w:"behind",a:"⬇︎"};
+    }
+    function colorFor(text){
+      const palette=["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#84cc16","#f97316"];
+      let hash=0; for(let i=0;i<text.length;i++) hash=(hash*31 + text.charCodeAt(i))|0;
+      return palette[Math.abs(hash)%palette.length];
+    }
+
+    // ===== Routing
+    async function buildTransitRoute(){
+      const startVal = document.getElementById("start").value.trim();
+      const destVal  = document.getElementById("dest").value.trim();
+      const pref     = document.getElementById("pref").value;
+      const depart   = document.getElementById("depart").value;
+      const timeVal  = document.getElementById("time").value;
+
+      const stepsEl  = document.getElementById("steps");
+      if(!startVal || !destVal){ stepsEl.textContent="Enter start and destination."; return; }
+      stepsEl.innerHTML = '<span class="muted">Mapping optimal route…</span>';
+
+      const summaryEl = document.getElementById("routeSummary");
+      summaryEl.classList.add("muted");
+      summaryEl.textContent = "Searching for the best transit options…";
+      document.getElementById("previewTrip").disabled = true;
+      lastSummaryText = "";
+
+      const req = { origin:startVal, destination:destVal, travelMode:"TRANSIT", transitOptions:{} };
+      const dt = timeVal ? new Date(timeVal) : new Date();
+      if (depart === "arrive") req.transitOptions.arrivalTime = dt; else req.transitOptions.departureTime = dt;
+      if (pref==="FEWER_TRANSFERS" || pref==="LESS_WALKING") req.transitOptions.routingPreference = google.maps.TransitRoutePreference[pref];
+
+      directionsService.route(req, async (res, st) => {
+        if(st!=="OK"){ stepsEl.textContent = "Route error: " + st; return; }
+        if(st!=="OK"){ 
+          stepsEl.textContent = "Route error: " + st;
+          document.getElementById("routeSummary").textContent = "Couldn't build that journey. Try adjusting time or spelling.";
+          document.getElementById("previewTrip").disabled = true;
+          return;
+        }
+        directionsRenderer.setDirections(res);
+        const leg = res.routes[0].legs[0];
+        const sv = new google.maps.StreetViewService();
+        lastSteps = [];
+        writeSummary(leg);
+
+        for(const step of leg.steps){
+          const isTransit = !!step.transit;
+          let anchor = step.end_location;
+          let stopLL = step.transit?.departure_stop?.location || null;
+
+          let title = step.instructions.replace(/<[^>]+>/g,"");
+          let subtitle = `${step.distance?.text||""} • ${step.duration?.text||""}`;
+          let badge = null;
+
+          if (isTransit){
+            const t = step.transit;
+            badge = t.line?.short_name || t.line?.name || "Line";
+            anchor = stopLL || step.end_location;
+            const headsign = t.headsign ? ` → ${t.headsign}` : "";
+            const stops = t.num_stops ? `${t.num_stops} stops` : "stops";
+            title = `Take ${badge}${headsign}`;
+            subtitle = `${t.departure_stop?.name||"Departure"} → ${t.arrival_stop?.name||"Arrival"} • ${stops}`;
+          }
+
+          const panoData = await new Promise(r=>{
+            sv.getPanorama({location:anchor, radius:80, source:"OUTDOOR"}, (d,s)=>{
+              if(s==="OK" && d?.location?.pano) r(d);
+              else sv.getPanorama({location:anchor, radius:150, source:"OUTDOOR"}, (d2,s2)=>r(s2==="OK"?d2:null));
+            });
+          });
+
+          let heading=0, pid=null, platlng=null;
+          if(panoData){ pid=panoData.location.pano; platlng=panoData.location.latLng; }
+
+          const anchorLat = typeof anchor.lat === "function" ? anchor.lat() : anchor.lat;
+          const anchorLng = typeof anchor.lng === "function" ? anchor.lng() : anchor.lng;
+
+          if(isTransit && stopLL && platlng) heading = bearing(platlng, stopLL);
+          else heading = bearing(step.start_location, step.end_location);
+          if(!Number.isFinite(heading)) heading = 0;
+
+          const img = svUrl(anchor.lat(), anchor.lng(), heading, pid);
+          const lat = platlng ? platlng.lat() : anchorLat;
+          const lng = platlng ? platlng.lng() : anchorLng;
+          const img = (lat!=null && lng!=null) ? svUrl(lat, lng, heading, pid) : "";
+
+          let note = "";
+          let chip = null;
+          if(isTransit && stopLL && (platlng || anchor)){
+            const from = platlng || anchor;
+            const d = Math.round(dist(from, stopLL));
+            const rel = dirWord(bearing(from, stopLL) - heading);
+            note = `🧭 Bus stop is ~${d} m ${rel.w}.`;
+            chip = `${rel.a} ${rel.w}`;
+          } else if(!isTransit){
+            chip = "🚶‍♀️ Walk";
+          } else if(isTransit){
+            chip = "🚌 Boarding";
+          }
+
+          lastSteps.push({ isTransit, title, subtitle, img, badge, note });
+          lastSteps.push({ isTransit, title, subtitle, img, badge, note, panoId: pid, heading, lat, lng, chip, embed: "" });
+        }
+
+        lastSteps = lastSteps.map(step => ({ ...step, embed: svEmbedUrl(step) }));
+        renderStepsFromCache();
+      });
+    }
+
+    function renderStepsFromCache(){
+      const stepsEl = document.getElementById("steps");
+      const showWalk = document.getElementById("filterWalk")?.checked ?? true;
+      const showTrans= document.getElementById("filterTransit")?.checked ?? true;
+
+      const filtered = lastSteps.filter(s => (s.isTransit && showTrans) || (!s.isTransit && showWalk));
+      const filtered = lastSteps
+        .map((s, i) => ({ ...s, originalIndex: i }))
+        .filter(s => (s.isTransit && showTrans) || (!s.isTransit && showWalk));
+      if(!filtered.length){ stepsEl.innerHTML = '<span class="muted">No steps with current filters.</span>'; return; }
+
+      const html = filtered.map((s, i) => `
+        <div class="step ${s.isTransit ? "transit" : "walk"}">
+        <div class="step ${s.isTransit ? "transit" : "walk"}" data-step-index="${s.originalIndex}">
+          <div class="node"></div>
+          <div class="img-wrap img-skel">
+            <span class="dir-chip"><span class="arrow">🧭</span>Landmark</span>
+            <img src="${s.img}" alt="Step ${i+1}" loading="lazy"
+                 onload="this.parentElement.classList.remove('img-skel')">
+            ${s.chip ? `<span class="dir-chip">${s.chip}</span>` : ""}
+            ${s.img ? `<img src="${s.img}" alt="Step ${i+1}" loading="lazy" onload="this.parentElement.classList.remove('img-skel')" onerror="handleImageError(this)">`
+                     : `<div class="no-image">Street View unavailable</div>`}
+          </div>
+          <div>
+            <div class="title"><strong>Step ${i+1}:</strong>
+              ${s.badge ? `<span class="route-badge" style="--route:${colorFor(s.badge)}">${s.badge}</span>` : ""}
+              ${s.title}
+            </div>
+            <div class="subtitle">${s.subtitle}</div>
+            ${s.note ? `<div class="extra-note">${s.note}</div>` : ""}
+            ${s.embed ? `<button class="chip inline" data-preview="${s.originalIndex}">Open Street View</button>` : ""}
+          </div>
+        </div>
+      `).join("");
+
+      stepsEl.innerHTML = html;
+
+      stepsEl.querySelectorAll("[data-preview]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.getAttribute("data-preview"));
+          showStepPreview(lastSteps[idx]);
+        });
+      });
+
+      stepsEl.scrollTop = 0;
+
+      const previewBtn = document.getElementById("previewTrip");
+      previewBtn.disabled = !lastSteps.some(step => step.embed);
+    }
+
+    function handleImageError(img){
+      const wrap = img.parentElement;
+      wrap.classList.remove("img-skel");
+      wrap.classList.add("img-missing");
+      wrap.innerHTML = '<div class="no-image">Street View not available</div>';
+    }
+
+    function writeSummary(leg){
+      const summaryEl = document.getElementById("routeSummary");
+      const previewBtn = document.getElementById("previewTrip");
+      const transitSteps = leg.steps.filter(s => s.transit);
+      const walkSteps = leg.steps.filter(s => !s.transit);
+      const walkDistance = walkSteps.reduce((acc, step) => acc + (step.distance?.value || 0), 0);
+      const durationText = leg.duration?.text || "--";
+      const arrival = leg.arrival_time?.text || "Arrival time unknown";
+      const departure = leg.departure_time?.text || "Depart now";
+      const transfers = Math.max(0, transitSteps.length - 1);
+      const walkKm = (walkDistance / 1000).toFixed(2);
+
+      lastSummaryText = `SnapNav route from ${leg.start_address} to ${leg.end_address}\n` +
+        `• Travel time: ${durationText}\n` +
+        `• Depart: ${departure} • Arrive: ${arrival}\n` +
+        `• Transit segments: ${transitSteps.length} (${transfers} transfer${transfers===1?"":"s"})\n` +
+        `• Estimated walking: ${walkKm} km`;
+
+      summaryEl.classList.remove("muted");
+      summaryEl.innerHTML = `
+        <div class="summary-row"><strong>${durationText}</strong><span>${transitSteps.length} transit segment${transitSteps.length===1?"":"s"}</span></div>
+        <div class="summary-row"><span>Depart</span><strong>${departure}</strong></div>
+        <div class="summary-row"><span>Arrive</span><strong>${arrival}</strong></div>
+        <div class="summary-row"><span>Walking</span><strong>${walkKm} km</strong></div>
+        <div class="summary-row"><span>Transfers</span><strong>${transfers}</strong></div>
+      `;
+
+      previewBtn.disabled = transitSteps.length + walkSteps.length === 0;
+    }
+
+    function copySummaryToClipboard(){
+      if(!lastSummaryText){
+        alert("Run a route first to copy the overview.");
+        return;
+      }
+      navigator.clipboard?.writeText(lastSummaryText).then(()=>{
+        toast("Copied route overview to clipboard! ✨");
+      }).catch(()=>{
+        alert("Couldn't copy automatically. Here's the text:\n\n" + lastSummaryText);
+      });
+    }
+
+    async function playStreetViewTour(){
+      if(!lastSteps.length){
+        alert("Build a route to launch the Street View tour.");
+        return;
+      }
+      const previewable = lastSteps.filter(s => s.embed);
+      if(!previewable.length){
+        alert("This route has no Street View imagery yet.");
+        return;
+      }
+
+      let i = 0;
+      showStepPreview(previewable[i]);
+      const box = document.getElementById("svLightbox");
+      box.dataset.advance = "1";
+      box.dataset.previewIndex = String(i);
+    }
+
+    function showStepPreview(step){
+      if(!step?.embed){ return; }
+      const box = document.getElementById("svLightbox");
+      const frame = document.getElementById("svFrame");
+      const meta = document.getElementById("svMeta");
+      frame.src = step.embed;
+      meta.innerHTML = `<strong>${step.title}</strong><br>${step.subtitle}`;
+      box.classList.add("show");
+      box.setAttribute("aria-hidden", "false");
+      document.body.classList.add("lock-scroll");
+
+      const previewable = lastSteps.filter(s => s.embed);
+      const idx = previewable.indexOf(step);
+      if(idx >= 0){
+        box.dataset.previewIndex = String(idx);
+      }
+    }
+
+    function closePreview(){
+      const box = document.getElementById("svLightbox");
+      const frame = document.getElementById("svFrame");
+      frame.src = "";
+      box.classList.remove("show");
+      box.setAttribute("aria-hidden", "true");
+      delete box.dataset.advance;
+      delete box.dataset.previewIndex;
+      document.body.classList.remove("lock-scroll");
+    }
+
+    function setupLightbox(){
+      const box = document.getElementById("svLightbox");
+      document.getElementById("svClose").addEventListener("click", closePreview);
+      document.getElementById("svBackdrop").addEventListener("click", closePreview);
+      document.addEventListener("keydown", (ev) => {
+        if(ev.key === "Escape" && box.classList.contains("show")) closePreview();
+        if(ev.key === "ArrowRight" && box.classList.contains("show") && box.dataset.advance){
+          advancePreview();
+        }
+      });
+      box.addEventListener("click", (ev) => {
+        if(ev.target === box) closePreview();
+      });
+    }
+
+    function advancePreview(){
+      const box = document.getElementById("svLightbox");
+      if(!box.dataset.advance){ return; }
+      const previewable = lastSteps.filter(s => s.embed);
+      if(!previewable.length){ return; }
+      const nextIndex = (Number(box.dataset.previewIndex || 0) + 1) % previewable.length;
+      box.dataset.previewIndex = String(nextIndex);
+      showStepPreview(previewable[nextIndex]);
+    }
+
+    function toast(msg){
+      const el = document.createElement("div");
+      el.className = "toast";
+      el.textContent = msg;
+      document.body.appendChild(el);
+      requestAnimationFrame(()=> el.classList.add("show"));
+      setTimeout(()=>{
+        el.classList.remove("show");
+        setTimeout(()=>el.remove(), 300);
+      }, 2600);
+    }
+
+    function listNearbyStops(){
+      const out = document.getElementById("nearby");
+      const startVal = document.getElementById("start").value.trim();
+      if(!startVal){ out.textContent = "Enter or set a start location first."; return; }
+
+      const service = new google.maps.places.PlacesService(map);
+      const geocoder = new google.maps.Geocoder();
+      geocoder.geocode({address:startVal}, (results,status)=>{
+        if(status!=="OK" || !results[0]){ out.textContent='Could not locate start.'; return; }
+        const loc = results[0].geometry.location;
+        map.setCenter(loc); map.setZoom(15);
+        const req = { location: loc, radius: 800, type: ['transit_station'] };
+        service.nearbySearch(req,(places, ps)=>{
+          if(ps!==google.maps.places.PlacesServiceStatus.OK || !places?.length){
+            out.textContent='No nearby stops within 800m.'; return;
+          }
+          const top = places.slice(0,8).map(p=>`• ${p.name}`).join('<br>');
+          out.innerHTML = `<strong>Nearby stops (≤800m):</strong><br>${top}`;
+        });
+      });
+    }
+  </script>
