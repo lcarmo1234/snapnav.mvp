@@ -58,6 +58,7 @@ header{
   border-bottom: 1px solid var(--border);
 }
 header .spacer{ flex:1 }
+.logo-mark{ width:22px; height:22px; }
 .logo{
   font-size:20px; margin:0;
   background: linear-gradient(90deg, #7dd3fc, #69a6ff, #a78bfa);
@@ -94,6 +95,15 @@ main{
 .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap }
 .grow{ flex:1; min-width:160px }
 
+/* Quick saves */
+.quick-saves{ display:flex; align-items:center; gap:8px; flex-wrap:wrap }
+.qs-label{ color:var(--muted); font-size:12px }
+.qs{
+  appearance:none; padding:8px 10px; border-radius:999px; border:1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 90%, #0b142a 10%); color:var(--text);
+  cursor:pointer; font-weight:700; font-size:12px;
+}
+
 /* Form controls */
 label{ font-size:12px; color:var(--muted); display:block; margin-bottom:6px }
 input,select{
@@ -117,6 +127,14 @@ input:focus,select:focus{ border-color: var(--accent); box-shadow: 0 0 0 4px var
   background: color-mix(in oklab, var(--card) 90%, #0b142a 10%);
   color:var(--text); border:1px solid var(--border); box-shadow:none
 }
+.btn.ghost{
+  background: transparent; color:var(--text); border:1px dashed var(--border);
+}
+
+/* Filters */
+.filters{ display:flex; align-items:center; gap:12px; }
+.toggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted) }
+.toggle input{ accent-color: var(--accent); }
 
 /* Map + Steps */
 #map{
@@ -134,10 +152,10 @@ input:focus,select:focus{ border-color: var(--accent); box-shadow: 0 0 0 4px var
 }
 .step{
   position:relative;
-  display:grid; grid-template-columns: 170px 1fr; gap:12px;
+  display:grid; grid-template-columns: 180px 1fr; gap:12px;
   background: color-mix(in oklab, var(--card) 90%, #000 10%);
   border:1px solid var(--border);
-  border-radius:14px; padding:12px; margin-left:8px;
+  border-radius:14px; padding:12px; margin-left:8px; margin-bottom:12px;
   transition: border-color .2s, box-shadow .2s, transform .06s;
 }
 .step:hover{ border-color:#2b3b61; box-shadow: var(--shadow-lg); transform: translateY(-1px) }
@@ -147,15 +165,22 @@ input:focus,select:focus{ border-color: var(--accent); box-shadow: 0 0 0 4px var
 }
 .step.walk .node{ background: var(--accent-2) }
 .step img{
-  width:100%; height:140px; object-fit:cover;
+  width:100%; height:160px; object-fit:cover;
   border-radius:12px; border:1px solid var(--border); background:#0b142a;
 }
-.title{ font-weight:900 }
+.title{ font-weight:900; display:flex; align-items:center; gap:8px }
 .subtitle{ color:var(--muted); font-size:12px; margin-top:4px }
 .step.walk{ border-left: 4px solid var(--accent-2) }
 .step.transit{ border-left: 4px solid var(--accent) }
-.step.walk .title::before{ content:"🚶 "; opacity:.95; margin-right:2px }
-.step.transit .title::before{ content:"🚌 "; opacity:.95; margin-right:2px }
+
+/* Route badge */
+.route-badge{
+  --route:#3b82f6;
+  background: color-mix(in oklab, var(--route) 18%, #000 82%);
+  color: white;
+  border:1px solid color-mix(in oklab, var(--route) 60%, #000);
+  padding:2px 8px; border-radius:999px; font-size:12px; font-weight:900;
+}
 
 /* Skeleton shimmer while images load */
 .img-skel{ position:relative; overflow:hidden }
