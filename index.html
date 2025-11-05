@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SnapNav – Public Transport MVP</title>
-  <link rel="stylesheet" href="style.css?v=20" />
+  <link rel="icon" href="snapnav.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="style.css?v=30" />
 </head>
 <body class="theme-dark">
   <!-- Floating animated background -->
   <canvas id="bg-orbs" aria-hidden="true"></canvas>
 
   <header>
+    <img src="snapnav.svg" alt="SnapNav" class="logo-mark" />
     <h1 class="logo">SnapNav</h1>
     <span class="badge">Transit-first</span>
     <div class="spacer"></div>
@@ -21,10 +23,22 @@
     <!-- Controls -->
     <section class="card" id="controls">
       <div class="stack">
+        <!-- Saved places -->
+        <div class="quick-saves">
+          <span class="qs-label">Saved places:</span>
+          <button class="qs" data-target="start" data-value="Dublin City University, Dublin">🏫 Uni</button>
+          <button class="qs" data-target="dest"  data-value="Heuston Station, Dublin">🚉 Heuston</button>
+          <button class="qs" data-target="dest"  data-value="Aviva Stadium, Dublin">🏟️ Stadium</button>
+          <button class="qs" data-target="dest"  data-value="Temple Bar, Dublin">🍻 Temple Bar</button>
+        </div>
+
         <div>
           <label for="start">Start (type or use current location)</label>
           <input id="start" placeholder="e.g. O'Connell Street, Dublin" />
-          <button class="btn" id="useHere">Use my current location</button>
+          <div class="row">
+            <button class="btn" id="useHere">Use my current location</button>
+            <button class="btn ghost" id="swapBtn" title="Swap start/destination">⇄ Swap</button>
+          </div>
           <div class="muted" id="startNote"></div>
         </div>
 
@@ -56,12 +70,25 @@
           </div>
         </div>
 
+        <!-- Filters -->
+        <div class="filters">
+          <span class="muted">Show:</span>
+          <label class="toggle">
+            <input type="checkbox" id="filterWalk" checked />
+            <span>Walking</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="filterTransit" checked />
+            <span>Transit</span>
+          </label>
+        </div>
+
         <div class="row">
           <button class="btn" id="routeBtn">Get transit route</button>
           <button class="btn secondary" id="nearbyBtn" title="Find nearby stops">Nearby stops</button>
         </div>
 
-        <p class="muted">Fetches <strong>TRANSIT</strong> routes and shows a visual timeline with Street View at key steps.</p>
+        <p class="muted">Visual timeline with Street View at key steps. Line badges show your bus/train clearly.</p>
         <div id="nearby" class="muted"></div>
       </div>
     </section>
@@ -94,10 +121,8 @@
       const b = document.body;
       b.classList.toggle('theme-dark');
       b.classList.toggle('theme-light');
-      // store preference
       localStorage.setItem('snapnav-theme', b.classList.contains('theme-dark') ? 'dark' : 'light');
     });
-    // restore theme
     (function(){
       const saved = localStorage.getItem('snapnav-theme');
       if(saved === 'light'){ document.body.classList.remove('theme-dark'); document.body.classList.add('theme-light'); }
@@ -115,9 +140,8 @@
         h = canvas.height = innerHeight * dpr;
         canvas.style.width  = innerWidth + 'px';
         canvas.style.height = innerHeight + 'px';
-        // build orbs
         const N = 16;
-        orbs = new Array(N).fill(0).map((_,i)=>({
+        orbs = new Array(N).fill(0).map(()=>({
           x: Math.random()*w, y: Math.random()*h,
           r: (20 + Math.random()*80) * dpr,
           hue: 200 + Math.random()*80,
@@ -148,10 +172,11 @@
 
     // ===== MAPS + TRANSIT =====
     let map, directionsService, directionsRenderer, startAutocomplete, destAutocomplete;
+    let lastSteps = []; // store for filtering
 
     function initMap(){
       map = new google.maps.Map(document.getElementById('map'),{
-        center:{lat:53.3498,lng:-6.2603}, // Dublin
+        center:{lat:53.3498,lng:-6.2603},
         zoom:13, mapTypeControl:false, streetViewControl:false, fullscreenControl:false,
         styles: [ { featureType:"poi", stylers:[{visibility:"off"}] } ]
       });
@@ -166,14 +191,34 @@
       document.getElementById('routeBtn').addEventListener('click', buildTransitRoute);
       document.getElementById('useHere').addEventListener('click', useCurrentLocationAsStart);
       document.getElementById('nearbyBtn').addEventListener('click', listNearbyStops);
-
-      // Dock quick actions
       document.getElementById('fabLocate').addEventListener('click', useCurrentLocationAsStart);
       document.getElementById('fabTop').addEventListener('click', ()=>window.scrollTo({top:0, behavior:'smooth'}));
+      document.getElementById('swapBtn').addEventListener('click', swapStartDest);
+
+      // saved places
+      document.querySelectorAll('.qs').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const target = btn.getAttribute('data-target');
+          const val = btn.getAttribute('data-value');
+          document.getElementById(target).value = val;
+        });
+      });
+
+      // filters
+      document.getElementById('filterWalk').addEventListener('change', renderStepsFromCache);
+      document.getElementById('filterTransit').addEventListener('change', renderStepsFromCache);
     }
 
-    function streetViewUrlAt(lat, lng, heading = 0, size = "340x140", panoId = null) {
-      const fov = 90;  const pitch = 0;
+    function swapStartDest(){
+      const a = document.getElementById('start');
+      const b = document.getElementById('dest');
+      const t = a.value; a.value = b.value; b.value = t;
+    }
+
+    function streetViewUrlAt(lat, lng, heading = 0, size = "380x160", panoId = null) {
+      // Make photos clearer: narrower FOV
+      const fov = 60;  // (was 90) → zooms in a bit
+      const pitch = 0;
       if (panoId) {
         return `https://maps.googleapis.com/maps/api/streetview?size=${size}&pano=${panoId}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`;
       }
@@ -226,16 +271,16 @@
         if(status!=="OK"){ stepsEl.innerHTML = `<span class='muted'>Routing error: ${status}</span>`; return; }
         directionsRenderer.setDirections(result);
         const leg = result.routes[0].legs[0];
-        let html = "";
+        lastSteps = []; // reset cache
 
         const sv = new google.maps.StreetViewService();
-        const getPano = (latLng) => new Promise((resolve)=>{
-          sv.getPanorama({ location: latLng, radius: 35, source: google.maps.StreetViewSource.OUTDOOR },
+        const getPanoData = (latLng) => new Promise((resolve)=>{
+          sv.getPanorama({ location: latLng, radius: 50, source: google.maps.StreetViewSource.OUTDOOR },
             (data, st) => {
-              if (st === google.maps.StreetViewStatus.OK && data?.location?.pano) resolve(data.location.pano);
+              if (st === google.maps.StreetViewStatus.OK && data?.location?.pano) resolve(data);
               else {
-                sv.getPanorama({ location: latLng, radius: 80, source: google.maps.StreetViewSource.OUTDOOR },
-                  (data2, st2) => resolve(st2 === google.maps.StreetViewStatus.OK && data2?.location?.pano ? data2.location.pano : null)
+                sv.getPanorama({ location: latLng, radius: 120, source: google.maps.StreetViewSource.OUTDOOR },
+                  (data2, st2) => resolve(st2 === google.maps.StreetViewStatus.OK ? data2 : null)
                 );
               }
             }
@@ -244,47 +289,85 @@
 
         for (let i = 0; i < leg.steps.length; i++){
           const step = leg.steps[i];
-          let lat = step.end_location.lat();
-          let lng = step.end_location.lng();
+          const isTransit = !!step.transit;
+
+          // Prefer stop coordinates for transit steps
+          let anchor = step.end_location;
           let title = step.instructions.replace(/<[^>]*>?/gm,'');
           let subtitle = `${step.distance?.text||''} • ${step.duration?.text||''}`;
-          let isTransit = false;
+          let routeBadge = null;
 
-          if(step.transit){
-            isTransit = true;
+          if(isTransit){
             const t = step.transit;
             const dep = t.departure_stop; const arr = t.arrival_stop;
-            if(dep && dep.location){ lat = dep.location.lat(); lng = dep.location.lng(); }
+            anchor = dep?.location || step.end_location;
             const line = t.line?.short_name || t.line?.name || 'Line';
+            routeBadge = line;
             const headsign = t.headsign ? ` → ${t.headsign}` : '';
             const stops = t.num_stops ? `${t.num_stops} stops` : '';
             title = `Take <span class='line'>${line}</span>${headsign}`;
             subtitle = `${dep?.name||'Departure'} → ${arr?.name||'Arrival'} • ${stops}`;
           }
 
-          let heading = 0;
-          try { heading = bearingFromTo(step.start_location, step.end_location); } catch(e){}
+          // Smarter heading: from pano position -> the next geometry point (or step end)
+          let heading = 0, panoId = null, panoLatLng = null;
+          const panoData = await getPanoData(anchor);
+          if(panoData){
+            panoId = panoData.location.pano;
+            panoLatLng = panoData.location.latLng;
+            try{
+              const toPoint = step.end_location || anchor;
+              heading = bearingFromTo(panoLatLng, toPoint);
+            }catch(e){}
+          }else{
+            try{ heading = bearingFromTo(step.start_location, step.end_location); }catch(e){}
+          }
 
-          const panoId = await getPano(new google.maps.LatLng(lat, lng));
-          const img = streetViewUrlAt(lat, lng, heading, "340x140", panoId);
+          const lat = anchor.lat(), lng = anchor.lng();
+          const img = streetViewUrlAt(lat, lng, heading, "380x160", panoId);
 
-          html += `
-            <div class="step ${isTransit ? 'transit' : 'walk'}">
-              <div class="node"></div>
-              <div class="img-skel">
-                <img src="${img}" alt="Step ${i+1} preview" loading="lazy"
-                     onload="this.parentElement.classList.remove('img-skel')"
-                     onerror="this.replaceWith((()=>{const d=document.createElement('div');d.className='muted';d.style.padding='12px';d.style.border='1px solid #1f2937';d.style.borderRadius='10px';d.style.display='grid';d.style.placeItems='center';d.textContent='No Street View here';return d;})())"/>
-              </div>
-              <div>
-                <div class="title"><strong>Step ${i+1}:</strong> ${title}</div>
-                <div class="subtitle">${subtitle}</div>
-              </div>
-            </div>`;
+          lastSteps.push({ isTransit, title, subtitle, img, routeBadge });
         }
 
-        stepsEl.innerHTML = html || '<span class="muted">No steps returned.</span>';
+        renderStepsFromCache();
       });
+    }
+
+    function renderStepsFromCache(){
+      const stepsEl = document.getElementById('steps');
+      const showWalk    = document.getElementById('filterWalk').checked;
+      const showTransit = document.getElementById('filterTransit').checked;
+
+      const filtered = lastSteps.filter(s => (s.isTransit && showTransit) || (!s.isTransit && showWalk));
+
+      if(!filtered.length){
+        stepsEl.innerHTML = '<span class="muted">No steps with current filters.</span>';
+        return;
+      }
+
+      // Route color via hash of badge text (consistent per line)
+      const palette = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#84cc16","#f97316"];
+      function colorFor(text){
+        let hash = 0; for(let i=0;i<text.length;i++) hash = (hash*31 + text.charCodeAt(i))|0;
+        return palette[Math.abs(hash)%palette.length];
+      }
+
+      const html = filtered.map((s, i) => {
+        const badge = s.routeBadge ? `<span class="route-badge" style="--route:${colorFor(s.routeBadge)}">${s.routeBadge}</span>` : "";
+        return `
+          <div class="step ${s.routeBadge ? 'transit' : 'walk'}">
+            <div class="node"></div>
+            <div class="img-skel"><img src="${s.img}" alt="Step ${i+1} preview" loading="lazy"
+              onload="this.parentElement.classList.remove('img-skel')"
+              onerror="this.replaceWith((()=>{const d=document.createElement('div');d.className='muted';d.style.padding='12px';d.style.border='1px solid #1f2937';d.style.borderRadius='10px';d.style.display='grid';d.style.placeItems='center';d.textContent='No Street View here';return d;})())"/></div>
+            <div>
+              <div class="title"><strong>Step ${i+1}:</strong> ${badge} ${s.title}</div>
+              <div class="subtitle">${s.subtitle}</div>
+            </div>
+          </div>`;
+      }).join("");
+
+      stepsEl.innerHTML = html;
     }
 
     function listNearbyStops(){
