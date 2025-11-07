@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device=device-width, initial-scale=1" />
-  <title>SnapNav – Public Transport MVP</title>
-  <link rel="stylesheet" href="style.css?v=20" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Visual public transport navigation with Street View preview for every step">
+  <title>SnapNav – Visual Transit Navigation</title>
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body class="theme-dark">
   <!-- Floating animated background -->
@@ -14,18 +15,35 @@
     <h1 class="logo">SnapNav</h1>
     <span class="badge">Transit-first</span>
     <div class="spacer"></div>
-    <button class="chip" id="toggleTheme" title="Toggle theme (L/D)">☀️/🌙</button>
+    <button class="chip" id="toggleTheme" title="Toggle theme" aria-label="Toggle light/dark theme">
+      <span class="theme-icon">☀️</span>
+    </button>
   </header>
 
   <main>
     <!-- Controls -->
-    <section class="card" id="controls">
+    <section class="card controls-card" id="controls">
       <div class="stack">
+        <!-- Quick Saves Section -->
+        <div class="quick-saves">
+          <label class="section-label">Quick Places</label>
+          <div class="quick-save-chips" id="quickSaves">
+            <button class="save-chip" data-location="Trinity College Dublin">🎓 Uni</button>
+            <button class="save-chip" data-location="Heuston Station, Dublin">🚉 Heuston</button>
+            <button class="save-chip" data-location="Temple Bar, Dublin">🍺 Temple Bar</button>
+            <button class="save-chip" data-location="Dublin Airport">✈️ Airport</button>
+          </div>
+        </div>
+
         <div>
-          <label for="start">Start (type or use current location)</label>
-          <input id="start" placeholder="e.g. O'Connell Street, Dublin" />
-          <button class="btn" id="useHere">Use my current location</button>
-          <div class="muted" id="startNote"></div>
+          <label for="start">Starting Point</label>
+          <div class="input-group">
+            <input id="start" placeholder="e.g. O'Connell Street, Dublin" aria-describedby="startNote" />
+            <button class="input-btn" id="useHere" title="Use current location" aria-label="Use my current location">
+              📍
+            </button>
+          </div>
+          <div class="hint" id="startNote"></div>
         </div>
 
         <div>
@@ -33,283 +51,619 @@
           <input id="dest" placeholder="e.g. Heuston Station" />
         </div>
 
-        <div class="row">
-          <div class="grow">
-            <label for="pref">Transit preference</label>
-            <select id="pref">
-              <option value="default">Best route</option>
-              <option value="FEWER_TRANSFERS">Fewer transfers</option>
-              <option value="LESS_WALKING">Less walking</option>
-            </select>
+        <!-- Collapsible Advanced Options -->
+        <details class="advanced-toggle">
+          <summary>Advanced Options</summary>
+          <div class="advanced-content">
+            <div class="row">
+              <div class="grow">
+                <label for="pref">Route Preference</label>
+                <select id="pref">
+                  <option value="default">Best route</option>
+                  <option value="FEWER_TRANSFERS">Fewer transfers</option>
+                  <option value="LESS_WALKING">Less walking</option>
+                </select>
+              </div>
+              <div class="grow">
+                <label for="depart">Timing</label>
+                <select id="depart">
+                  <option value="now">Leave now</option>
+                  <option value="departAt">Depart at…</option>
+                  <option value="arrive">Arrive by…</option>
+                </select>
+              </div>
+            </div>
+            <div class="grow" id="timeWrapper" style="display:none;">
+              <label for="time">Select Time</label>
+              <input id="time" type="datetime-local" />
+            </div>
           </div>
-          <div class="grow">
-            <label for="depart">When</label>
-            <select id="depart">
-              <option value="now">Leave now</option>
-              <option value="arrive">Arrive by… (uses time below)</option>
-              <option value="departAt">Depart at… (uses time below)</option>
-            </select>
-          </div>
-          <div class="grow">
-            <label for="time">Time</label>
-            <input id="time" type="datetime-local" />
-          </div>
+        </details>
+
+        <div class="row action-row">
+          <button class="btn btn-primary" id="routeBtn">
+            <span class="btn-icon">🚌</span>
+            Get Route
+          </button>
+          <button class="btn btn-secondary" id="nearbyBtn" title="Find nearby stops">
+            <span class="btn-icon">📍</span>
+            Nearby Stops
+          </button>
         </div>
 
-        <div class="row">
-          <button class="btn" id="routeBtn">Get transit route</button>
-          <button class="btn secondary" id="nearbyBtn" title="Find nearby stops">Nearby stops</button>
-        </div>
-
-        <p class="muted">Fetches <strong>TRANSIT</strong> routes and shows a visual timeline with Street View at key steps.</p>
-        <div id="nearby" class="muted"></div>
+        <div id="routeSummary" class="route-summary"></div>
+        <div id="nearby" class="nearby-results"></div>
       </div>
     </section>
 
     <!-- Map + Steps -->
-    <section class="card">
-      <div id="map"></div>
-      <h3 class="section-title">Visual Transit Timeline</h3>
-      <div id="steps" class="timeline muted">Enter start + destination to see transit steps…</div>
+    <section class="card map-card">
+      <div id="map" role="application" aria-label="Transit route map"></div>
+      
+      <!-- Progress Indicator -->
+      <div id="routeProgress" class="route-progress" style="display:none;">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-text">
+          <span id="currentStep">Step 1</span>
+          <span id="totalSteps">of 8</span>
+        </div>
+      </div>
+
+      <div class="timeline-header">
+        <h3 class="section-title">Visual Transit Timeline</h3>
+        <div class="timeline-actions">
+          <button class="icon-btn" id="expandAll" title="Expand all steps" style="display:none;">
+            <span>⬇️</span>
+          </button>
+        </div>
+      </div>
+      
+      <div id="steps" class="timeline" role="list">
+        <div class="empty-state">
+          <div class="empty-icon">🗺️</div>
+          <p class="empty-title">Ready to navigate?</p>
+          <p class="empty-subtitle">Enter your start and destination to see a visual transit route with Street View previews</p>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loadingSteps" class="loading-state" style="display:none;">
+        <div class="spinner"></div>
+        <p>Finding your route...</p>
+      </div>
     </section>
   </main>
 
   <!-- Quick actions dock -->
   <div class="dock">
-    <button class="fab" id="fabLocate" title="Use my current location">📍</button>
-    <button class="fab" id="fabTop" title="Scroll to top">⬆️</button>
+    <button class="fab" id="fabLocate" title="Use my current location" aria-label="Use current location">📍</button>
+    <button class="fab" id="fabTop" title="Scroll to top" aria-label="Scroll to top">⬆️</button>
   </div>
 
+  <!-- Toast notifications -->
+  <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
   <footer>
-    Uses Google Maps JavaScript API, Places API, <strong>Directions API (TRANSIT)</strong>, and Street View Static API.
+    <div class="footer-content">
+      <p>Powered by Google Maps APIs • <a href="#" id="aboutLink">About SnapNav</a></p>
+      <p class="footer-hint">Tip: Click on any step to see full Street View</p>
+    </div>
   </footer>
 
   <script>
-    // ===== CONFIG: your key (already used below in Maps loader) =====
+    // ===== CONFIG =====
     const apiKey = "AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA";
+
+    // ===== UTILITY FUNCTIONS =====
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    function formatDistance(meters) {
+      if (meters < 1000) return `${Math.round(meters)} m`;
+      return `${(meters / 1000).toFixed(1)} km`;
+    }
+
+    function getRelativeDirection(degrees) {
+      if (degrees < 22.5 || degrees >= 337.5) return "ahead";
+      if (degrees < 67.5) return "to the right";
+      if (degrees < 112.5) return "on your right";
+      if (degrees < 157.5) return "behind you to the right";
+      if (degrees < 202.5) return "behind you";
+      if (degrees < 247.5) return "behind you to the left";
+      if (degrees < 292.5) return "on your left";
+      return "to the left";
+    }
 
     // ===== THEME TOGGLE =====
     const toggleThemeBtn = document.getElementById('toggleTheme');
-    toggleThemeBtn?.addEventListener('click', ()=>{
+    const themeIcon = toggleThemeBtn.querySelector('.theme-icon');
+    
+    toggleThemeBtn?.addEventListener('click', () => {
       const b = document.body;
       b.classList.toggle('theme-dark');
       b.classList.toggle('theme-light');
-      // store preference
-      localStorage.setItem('snapnav-theme', b.classList.contains('theme-dark') ? 'dark' : 'light');
+      const isDark = b.classList.contains('theme-dark');
+      themeIcon.textContent = isDark ? '☀️' : '🌙';
+      localStorage.setItem('snapnav-theme', isDark ? 'dark' : 'light');
+      showToast(`${isDark ? 'Dark' : 'Light'} theme activated`, 'success');
     });
-    // restore theme
-    (function(){
+
+    // Restore theme
+    (function() {
       const saved = localStorage.getItem('snapnav-theme');
-      if(saved === 'light'){ document.body.classList.remove('theme-dark'); document.body.classList.add('theme-light'); }
+      if (saved === 'light') {
+        document.body.classList.remove('theme-dark');
+        document.body.classList.add('theme-light');
+        themeIcon.textContent = '🌙';
+      }
     })();
 
-    // ===== FLOATING ORBS BACKGROUND (tiny canvas animation) =====
-    (function(){
+    // ===== QUICK SAVES =====
+    document.getElementById('quickSaves')?.addEventListener('click', (e) => {
+      const chip = e.target.closest('.save-chip');
+      if (!chip) return;
+      
+      const location = chip.dataset.location;
+      const destInput = document.getElementById('dest');
+      
+      if (!destInput.value.trim()) {
+        destInput.value = location;
+        destInput.focus();
+        showToast(`Set destination to ${chip.textContent}`, 'success');
+      } else {
+        document.getElementById('start').value = destInput.value;
+        destInput.value = location;
+        showToast(`Route updated`, 'success');
+      }
+    });
+
+    // ===== ADVANCED OPTIONS TOGGLE =====
+    const departSelect = document.getElementById('depart');
+    const timeWrapper = document.getElementById('timeWrapper');
+    
+    departSelect?.addEventListener('change', () => {
+      const needsTime = departSelect.value !== 'now';
+      timeWrapper.style.display = needsTime ? 'block' : 'none';
+      
+      if (needsTime && !document.getElementById('time').value) {
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        document.getElementById('time').value = now.toISOString().slice(0, 16);
+      }
+    });
+
+    // ===== FLOATING ORBS BACKGROUND =====
+    (function() {
       const canvas = document.getElementById('bg-orbs');
       const ctx = canvas.getContext('2d');
       let w, h, dpr, orbs;
 
-      function resize(){
+      function resize() {
         dpr = window.devicePixelRatio || 1;
-        w = canvas.width  = innerWidth  * dpr;
+        w = canvas.width = innerWidth * dpr;
         h = canvas.height = innerHeight * dpr;
-        canvas.style.width  = innerWidth + 'px';
+        canvas.style.width = innerWidth + 'px';
         canvas.style.height = innerHeight + 'px';
-        // build orbs
-        const N = 16;
-        orbs = new Array(N).fill(0).map((_,i)=>({
-          x: Math.random()*w, y: Math.random()*h,
-          r: (20 + Math.random()*80) * dpr,
-          hue: 200 + Math.random()*80,
-          a: 0.06 + Math.random()*0.10,
-          vx: (Math.random()*0.6 - 0.3) * dpr,
-          vy: (Math.random()*0.6 - 0.3) * dpr,
+        
+        const N = 12;
+        orbs = new Array(N).fill(0).map((_, i) => ({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: (30 + Math.random() * 70) * dpr,
+          hue: 200 + Math.random() * 60,
+          a: 0.05 + Math.random() * 0.08,
+          vx: (Math.random() * 0.4 - 0.2) * dpr,
+          vy: (Math.random() * 0.4 - 0.2) * dpr,
         }));
       }
-      function tick(){
-        ctx.clearRect(0,0,w,h);
-        for(const o of orbs){
-          o.x += o.vx; o.y += o.vy;
-          if(o.x < -o.r) o.x = w + o.r;
-          if(o.x >  w+o.r) o.x = -o.r;
-          if(o.y < -o.r) o.y = h + o.r;
-          if(o.y >  h+o.r) o.y = -o.r;
+
+      function tick() {
+        ctx.clearRect(0, 0, w, h);
+        for (const o of orbs) {
+          o.x += o.vx;
+          o.y += o.vy;
+          if (o.x < -o.r) o.x = w + o.r;
+          if (o.x > w + o.r) o.x = -o.r;
+          if (o.y < -o.r) o.y = h + o.r;
+          if (o.y > h + o.r) o.y = -o.r;
+          
           const grad = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
           grad.addColorStop(0, `hsla(${o.hue}, 85%, 60%, ${o.a})`);
           grad.addColorStop(1, `hsla(${o.hue}, 85%, 60%, 0)`);
           ctx.fillStyle = grad;
-          ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+          ctx.fill();
         }
         requestAnimationFrame(tick);
       }
+
       addEventListener('resize', resize);
-      resize(); tick();
+      resize();
+      tick();
     })();
 
     // ===== MAPS + TRANSIT =====
     let map, directionsService, directionsRenderer, startAutocomplete, destAutocomplete;
+    let currentRoute = null;
 
-    function initMap(){
-      map = new google.maps.Map(document.getElementById('map'),{
-        center:{lat:53.3498,lng:-6.2603}, // Dublin
-        zoom:13, mapTypeControl:false, streetViewControl:false, fullscreenControl:false,
-        styles: [ { featureType:"poi", stylers:[{visibility:"off"}] } ]
+    function initMap() {
+      map = new google.maps.Map(document.getElementById('map'), {
+        center: { lat: 53.3498, lng: -6.2603 },
+        zoom: 13,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+        styles: [{
+          featureType: "poi",
+          elementType: "labels",
+          stylers: [{ visibility: "off" }]
+        }]
       });
+
       directionsService = new google.maps.DirectionsService();
-      directionsRenderer = new google.maps.DirectionsRenderer({map, suppressMarkers:true, polylineOptions:{strokeColor:"#69a6ff"}});
+      directionsRenderer = new google.maps.DirectionsRenderer({
+        map,
+        suppressMarkers: false,
+        polylineOptions: {
+          strokeColor: "#69a6ff",
+          strokeWeight: 4,
+          strokeOpacity: 0.8
+        }
+      });
 
       const startInput = document.getElementById('start');
-      const destInput  = document.getElementById('dest');
-      startAutocomplete = new google.maps.places.Autocomplete(startInput,{fields:["place_id","geometry","name"]});
-      destAutocomplete  = new google.maps.places.Autocomplete(destInput,{fields:["place_id","geometry","name"]});
+      const destInput = document.getElementById('dest');
+      
+      startAutocomplete = new google.maps.places.Autocomplete(startInput, {
+        fields: ["place_id", "geometry", "name", "formatted_address"]
+      });
+      
+      destAutocomplete = new google.maps.places.Autocomplete(destInput, {
+        fields: ["place_id", "geometry", "name", "formatted_address"]
+      });
 
+      // Event listeners
       document.getElementById('routeBtn').addEventListener('click', buildTransitRoute);
       document.getElementById('useHere').addEventListener('click', useCurrentLocationAsStart);
       document.getElementById('nearbyBtn').addEventListener('click', listNearbyStops);
-
-      // Dock quick actions
       document.getElementById('fabLocate').addEventListener('click', useCurrentLocationAsStart);
-      document.getElementById('fabTop').addEventListener('click', ()=>window.scrollTo({top:0, behavior:'smooth'}));
+      document.getElementById('fabTop').addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      // Keyboard shortcut
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.target.id === 'start' || e.target.id === 'dest')) {
+          buildTransitRoute();
+        }
+      });
     }
 
-    function streetViewUrlAt(lat, lng, heading = 0, size = "340x140", panoId = null) {
-      const fov = 90;  const pitch = 0;
+    function streetViewUrlAt(lat, lng, heading = 0, size = "400x200", panoId = null) {
+      const fov = 90;
+      const pitch = 0;
+      
       if (panoId) {
         return `https://maps.googleapis.com/maps/api/streetview?size=${size}&pano=${panoId}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`;
       }
       return `https://maps.googleapis.com/maps/api/streetview?size=${size}&location=${lat},${lng}&heading=${heading}&fov=${fov}&pitch=${pitch}&key=${apiKey}`;
     }
-    function bearingFromTo(aLatLng, bLatLng){
+
+    function bearingFromTo(aLatLng, bLatLng) {
       return google.maps.geometry.spherical.computeHeading(aLatLng, bLatLng);
     }
 
-    function useCurrentLocationAsStart(){
+    function useCurrentLocationAsStart() {
       const note = document.getElementById('startNote');
-      if(!navigator.geolocation){ note.textContent='Geolocation not supported.'; return; }
-      note.textContent='Finding your location…';
-      navigator.geolocation.getCurrentPosition(pos=>{
-        const {latitude, longitude} = pos.coords;
-        const latlng = new google.maps.LatLng(latitude, longitude);
-        const geocoder = new google.maps.Geocoder();
-        geocoder.geocode({location:latlng},(results,status)=>{
-          if(status==='OK' && results[0]){
-            document.getElementById('start').value = results[0].formatted_address;
-            note.textContent='Using your current location.';
-          }else{
-            document.getElementById('start').value = `${latitude}, ${longitude}`;
-            note.textContent='Using your coordinates.';
-          }
-        });
-      },()=>{ note.textContent = "Couldn't get location (permission denied?)."; });
+      
+      if (!navigator.geolocation) {
+        showToast('Geolocation not supported by your browser', 'error');
+        return;
+      }
+
+      note.textContent = 'Finding your location…';
+      showToast('Getting your location...', 'info');
+
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const { latitude, longitude } = pos.coords;
+          const latlng = new google.maps.LatLng(latitude, longitude);
+          const geocoder = new google.maps.Geocoder();
+          
+          geocoder.geocode({ location: latlng }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              document.getElementById('start').value = results[0].formatted_address;
+              note.textContent = '📍 Using your current location';
+              showToast('Location found!', 'success');
+              map.setCenter(latlng);
+              map.setZoom(15);
+            } else {
+              document.getElementById('start').value = `${latitude}, ${longitude}`;
+              note.textContent = '📍 Using coordinates';
+              showToast('Using coordinates', 'success');
+            }
+          });
+        },
+        error => {
+          note.textContent = '';
+          showToast('Could not get your location. Please check permissions.', 'error');
+        }
+      );
     }
 
-    async function buildTransitRoute(){
+    async function buildTransitRoute() {
       const start = document.getElementById('start').value.trim();
-      const dest  = document.getElementById('dest').value.trim();
-      const pref  = document.getElementById('pref').value;
-      const when  = document.getElementById('depart').value;
+      const dest = document.getElementById('dest').value.trim();
+      const pref = document.getElementById('pref').value;
+      const when = document.getElementById('depart').value;
       const timeVal = document.getElementById('time').value;
       const stepsEl = document.getElementById('steps');
+      const loadingEl = document.getElementById('loadingSteps');
+      const summaryEl = document.getElementById('routeSummary');
 
-      if(!start || !dest){ stepsEl.innerHTML='<span class="muted">Please enter start and destination.</span>'; return; }
+      if (!start || !dest) {
+        showToast('Please enter both start and destination', 'error');
+        return;
+      }
 
-      const req = { origin:start, destination:dest, travelMode: google.maps.TravelMode.TRANSIT, transitOptions: {} };
-      if(pref==='FEWER_TRANSFERS' || pref==='LESS_WALKING'){
+      // Show loading
+      stepsEl.innerHTML = '';
+      loadingEl.style.display = 'flex';
+      summaryEl.innerHTML = '';
+
+      const req = {
+        origin: start,
+        destination: dest,
+        travelMode: google.maps.TravelMode.TRANSIT,
+        transitOptions: {}
+      };
+
+      if (pref === 'FEWER_TRANSFERS' || pref === 'LESS_WALKING') {
         req.transitOptions.routingPreference = google.maps.TransitRoutePreference[pref];
       }
+
       const dt = timeVal ? new Date(timeVal) : new Date();
-      if(when==='arrive'){ req.transitOptions.arrivalTime = dt; }
-      else if(when==='departAt'){ req.transitOptions.departureTime = dt; }
-      else { req.transitOptions.departureTime = new Date(); }
+      if (when === 'arrive') {
+        req.transitOptions.arrivalTime = dt;
+      } else if (when === 'departAt') {
+        req.transitOptions.departureTime = dt;
+      } else {
+        req.transitOptions.departureTime = new Date();
+      }
 
-      directionsService.route(req, async (result,status)=>{
-        if(status!=="OK"){ stepsEl.innerHTML = `<span class='muted'>Routing error: ${status}</span>`; return; }
+      directionsService.route(req, async (result, status) => {
+        loadingEl.style.display = 'none';
+
+        if (status !== "OK") {
+          stepsEl.innerHTML = `
+            <div class="error-state">
+              <div class="error-icon">⚠️</div>
+              <p class="error-title">Could not find route</p>
+              <p class="error-subtitle">Error: ${status}</p>
+              <p class="error-hint">Try adjusting your locations or timing</p>
+            </div>`;
+          showToast('Route not found', 'error');
+          return;
+        }
+
         directionsRenderer.setDirections(result);
+        currentRoute = result;
         const leg = result.routes[0].legs[0];
-        let html = "";
 
+        // Show route summary
+        summaryEl.innerHTML = `
+          <div class="summary-card">
+            <div class="summary-main">
+              <span class="summary-duration">${leg.duration.text}</span>
+              <span class="summary-distance">${leg.distance.text}</span>
+            </div>
+            <div class="summary-details">
+              <span>🚦 ${leg.steps.length} steps</span>
+              <span>🔄 ${leg.steps.filter(s => s.transit).length} transit legs</span>
+            </div>
+          </div>`;
+
+        let html = "";
         const sv = new google.maps.StreetViewService();
-        const getPano = (latLng) => new Promise((resolve)=>{
-          sv.getPanorama({ location: latLng, radius: 35, source: google.maps.StreetViewSource.OUTDOOR },
+
+        const getPano = (latLng) => new Promise((resolve) => {
+          sv.getPanorama(
+            { location: latLng, radius: 50, source: google.maps.StreetViewSource.OUTDOOR },
             (data, st) => {
-              if (st === google.maps.StreetViewStatus.OK && data?.location?.pano) resolve(data.location.pano);
-              else {
-                sv.getPanorama({ location: latLng, radius: 80, source: google.maps.StreetViewSource.OUTDOOR },
-                  (data2, st2) => resolve(st2 === google.maps.StreetViewStatus.OK && data2?.location?.pano ? data2.location.pano : null)
-                );
+              if (st === google.maps.StreetViewStatus.OK && data?.location?.pano) {
+                resolve(data.location.pano);
+              } else {
+                resolve(null);
               }
             }
           );
         });
 
-        for (let i = 0; i < leg.steps.length; i++){
+        for (let i = 0; i < leg.steps.length; i++) {
           const step = leg.steps[i];
           let lat = step.end_location.lat();
           let lng = step.end_location.lng();
-          let title = step.instructions.replace(/<[^>]*>?/gm,'');
-          let subtitle = `${step.distance?.text||''} • ${step.duration?.text||''}`;
+          let title = step.instructions.replace(/<[^>]*>?/gm, '');
+          let subtitle = `${step.distance?.text || ''} • ${step.duration?.text || ''}`;
           let isTransit = false;
+          let transitInfo = '';
+          let stepIcon = '🚶';
 
-          if(step.transit){
+          if (step.transit) {
             isTransit = true;
+            stepIcon = '🚌';
             const t = step.transit;
-            const dep = t.departure_stop; const arr = t.arrival_stop;
-            if(dep && dep.location){ lat = dep.location.lat(); lng = dep.location.lng(); }
+            const dep = t.departure_stop;
+            const arr = t.arrival_stop;
+            
+            if (dep && dep.location) {
+              lat = dep.location.lat();
+              lng = dep.location.lng();
+            }
+
             const line = t.line?.short_name || t.line?.name || 'Line';
             const headsign = t.headsign ? ` → ${t.headsign}` : '';
             const stops = t.num_stops ? `${t.num_stops} stops` : '';
-            title = `Take <span class='line'>${line}</span>${headsign}`;
-            subtitle = `${dep?.name||'Departure'} → ${arr?.name||'Arrival'} • ${stops}`;
+            const vehicleType = t.line?.vehicle?.type || 'TRANSIT';
+            
+            // Better icons based on vehicle type
+            if (vehicleType === 'BUS') stepIcon = '🚌';
+            else if (vehicleType === 'TRAM' || vehicleType === 'LIGHT_RAIL') stepIcon = '🚊';
+            else if (vehicleType === 'SUBWAY' || vehicleType === 'METRO_RAIL') stepIcon = '🚇';
+            else if (vehicleType === 'RAIL' || vehicleType === 'HEAVY_RAIL') stepIcon = '🚆';
+
+            title = `Take <span class='line-badge'>${line}</span>${headsign}`;
+            subtitle = stops;
+            
+            transitInfo = `
+              <div class="transit-details">
+                <div class="transit-stop">
+                  <span class="stop-label">Board at:</span>
+                  <span class="stop-name">${dep?.name || 'Departure'}</span>
+                </div>
+                <div class="transit-stop">
+                  <span class="stop-label">Exit at:</span>
+                  <span class="stop-name">${arr?.name || 'Arrival'}</span>
+                </div>
+              </div>`;
           }
 
           let heading = 0;
-          try { heading = bearingFromTo(step.start_location, step.end_location); } catch(e){}
+          try {
+            heading = bearingFromTo(step.start_location, step.end_location);
+          } catch (e) {}
 
           const panoId = await getPano(new google.maps.LatLng(lat, lng));
-          const img = streetViewUrlAt(lat, lng, heading, "340x140", panoId);
+          const img = streetViewUrlAt(lat, lng, heading, "400x200", panoId);
+
+          // Calculate relative direction for navigation hint
+          const distance = step.distance?.value || 0;
+          let navHint = '';
+          if (!isTransit && distance > 0) {
+            const direction = getRelativeDirection(Math.abs(heading));
+            navHint = `<div class="nav-hint">🧭 Look ${direction}</div>`;
+          }
 
           html += `
-            <div class="step ${isTransit ? 'transit' : 'walk'}">
-              <div class="node"></div>
-              <div class="img-skel">
-                <img src="${img}" alt="Step ${i+1} preview" loading="lazy"
-                     onload="this.parentElement.classList.remove('img-skel')"
-                     onerror="this.replaceWith((()=>{const d=document.createElement('div');d.className='muted';d.style.padding='12px';d.style.border='1px solid #1f2937';d.style.borderRadius='10px';d.style.display='grid';d.style.placeItems='center';d.textContent='No Street View here';return d;})())"/>
-              </div>
-              <div>
-                <div class="title"><strong>Step ${i+1}:</strong> ${title}</div>
-                <div class="subtitle">${subtitle}</div>
+            <div class="step ${isTransit ? 'transit' : 'walk'}" role="listitem" data-step="${i + 1}">
+              <div class="node">${stepIcon}</div>
+              <div class="step-content">
+                <div class="step-header">
+                  <span class="step-number">Step ${i + 1}</span>
+                  <span class="step-badge ${isTransit ? 'badge-transit' : 'badge-walk'}">
+                    ${isTransit ? 'Transit' : 'Walk'}
+                  </span>
+                </div>
+                <div class="step-body">
+                  <div class="step-image-wrapper">
+                    <div class="img-skel">
+                      <img src="${img}" alt="Street view for step ${i + 1}" loading="lazy"
+                           onload="this.parentElement.classList.remove('img-skel')"
+                           onerror="this.parentElement.innerHTML='<div class=no-view>Street View unavailable</div>'"/>
+                    </div>
+                    ${navHint}
+                  </div>
+                  <div class="step-info">
+                    <div class="step-title">${title}</div>
+                    <div class="step-subtitle">${subtitle}</div>
+                    ${transitInfo}
+                  </div>
+                </div>
               </div>
             </div>`;
         }
 
-        stepsEl.innerHTML = html || '<span class="muted">No steps returned.</span>';
+        stepsEl.innerHTML = html || '<div class="empty-state">No steps found</div>';
+        
+        // Update progress indicator
+        document.getElementById('routeProgress').style.display = 'flex';
+        document.getElementById('currentStep').textContent = 'Step 1';
+        document.getElementById('totalSteps').textContent = `of ${leg.steps.length}`;
+        
+        showToast('Route loaded successfully!', 'success');
+        
+        // Smooth scroll to timeline
+        setTimeout(() => {
+          document.querySelector('.timeline').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 300);
       });
     }
 
-    function listNearbyStops(){
+    function listNearbyStops() {
       const output = document.getElementById('nearby');
       const startVal = document.getElementById('start').value.trim();
-      if(!startVal){ output.textContent = 'Enter or set a start location first.'; return; }
+      
+      if (!startVal) {
+        showToast('Enter a location first', 'error');
+        return;
+      }
+
+      output.innerHTML = '<div class="loading-inline"><div class="spinner-sm"></div> Finding stops...</div>';
 
       const service = new google.maps.places.PlacesService(map);
       const geocoder = new google.maps.Geocoder();
-      geocoder.geocode({address:startVal}, (results,status)=>{
-        if(status!=="OK" || !results[0]){ output.textContent='Could not locate start.'; return; }
-        const loc = results[0].geometry.location;
-        map.setCenter(loc); map.setZoom(15);
+      
+      geocoder.geocode({ address: startVal }, (results, status) => {
+        if (status !== "OK" || !results[0]) {
+          output.innerHTML = '<div class="error-inline">Could not locate address</div>';
+          return;
+        }
 
-        const request = { location: loc, radius: 800, type: ['transit_station'] };
-        service.nearbySearch(request,(places, ps)=>{
-          if(ps!==google.maps.places.PlacesServiceStatus.OK || !places?.length){ output.textContent='No nearby stops within 800m.'; return; }
-          const top = places.slice(0,8).map(p=>`• ${p.name}`).join('<br>');
-          output.innerHTML = `<strong>Nearby stops (≤800m):</strong><br>${top}`;
+        const loc = results[0].geometry.location;
+        map.setCenter(loc);
+        map.setZoom(15);
+
+        const request = {
+          location: loc,
+          radius: 800,
+          type: ['transit_station']
+        };
+
+        service.nearbySearch(request, (places, ps) => {
+          if (ps !== google.maps.places.PlacesServiceStatus.OK || !places?.length) {
+            output.innerHTML = '<div class="info-inline">No transit stops within 800m</div>';
+            return;
+          }
+
+          const list = places.slice(0, 8).map(p => {
+            const dist = google.maps.geometry.spherical.computeDistanceBetween(
+              loc,
+              p.geometry.location
+            );
+            return `
+              <div class="nearby-item">
+                <span class="nearby-name">${p.name}</span>
+                <span class="nearby-dist">${formatDistance(dist)}</span>
+              </div>`;
+          }).join('');
+
+          output.innerHTML = `
+            <div class="nearby-container">
+              <div class="nearby-header">🚏 Nearby Stops (within 800m)</div>
+              ${list}
+            </div>`;
+          
+          showToast(`Found ${places.length} nearby stops`, 'success');
         });
       });
     }
   </script>
 
-  <!-- Load Maps JS (with Places + Geometry) and start app -->
+  <!-- Load Maps JS -->
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDVs3hWImBAcyyucwIzQtVwRpq-jzesCzA&libraries=places,geometry&callback=initMap"></script>
 </body>
 </html>
