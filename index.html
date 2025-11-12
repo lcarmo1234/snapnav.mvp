@@ -375,17 +375,22 @@
 
     async function findNearbyLandmarks(lat, lng) {
       return new Promise((resolve) => {
-        placesService.nearbySearch({
-          location: new google.maps.LatLng(lat, lng),
-          radius: 100,
-          type: ['point_of_interest']
-        }, (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results?.length) {
-            resolve(results.slice(0, 2).map(p => p.name));
-          } else {
-            resolve([]);
-          }
-        });
+        try {
+          placesService.nearbySearch({
+            location: new google.maps.LatLng(lat, lng),
+            radius: 100,
+            type: ['point_of_interest']
+          }, (results, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && results?.length) {
+              resolve(results.slice(0, 2).map(p => p.name));
+            } else {
+              resolve([]);
+            }
+          });
+        } catch (error) {
+          console.warn('Landmarks error:', error);
+          resolve([]);
+        }
       });
     }
 
@@ -413,23 +418,37 @@
         transitOptions: { departureTime: new Date() }
       };
 
+      console.log('Requesting route:', req);
+
       directionsService.route(req, async (result, status) => {
+        console.log('Route result:', status, result);
         loadingEl.style.display = 'none';
 
         if (status !== "OK") {
-          stepsEl.innerHTML = `<div class="error-state"><div class="error-icon">⚠️</div><p class="error-title">Route not found</p></div>`;
-          showToast('Route not found', 'error');
+          stepsEl.innerHTML = `<div class="error-state"><div class="error-icon">⚠️</div><p class="error-title">Route not found</p><p class="error-subtitle">Status: ${status}</p></div>`;
+          showToast('Route not found: ' + status, 'error');
+          return;
+        }
+
+        if (!result.routes || !result.routes[0] || !result.routes[0].legs || !result.routes[0].legs[0]) {
+          stepsEl.innerHTML = `<div class="error-state"><div class="error-icon">⚠️</div><p class="error-title">No route data</p></div>`;
+          showToast('No route data returned', 'error');
           return;
         }
 
         directionsRenderer.setDirections(result);
         const leg = result.routes[0].legs[0];
 
+        console.log('Route has', leg.steps.length, 'steps');
+
         summaryEl.innerHTML = `
           <div class="summary-card">
             <div class="summary-main">
               <span class="summary-duration">${leg.duration.text}</span>
               <span class="summary-distance">${leg.distance.text}</span>
+            </div>
+            <div class="summary-details">
+              <span>🚦 ${leg.steps.length} steps</span>
             </div>
           </div>`;
 
@@ -442,7 +461,10 @@
           });
         });
 
+        console.log('Starting to build steps HTML...');
+
         for (let i = 0; i < leg.steps.length; i++) {
+          console.log('Processing step', i + 1, 'of', leg.steps.length);
           const step = leg.steps[i];
           const nextStep = i < leg.steps.length - 1 ? leg.steps[i + 1] : null;
           
@@ -472,6 +494,8 @@
           const instructions = generateSimpleInstruction(step, nextStep);
           const landmarks = await findNearbyLandmarks(lat, lng);
           const direction = getDetailedDirection(heading);
+
+          console.log('Step', i + 1, '- Instructions:', instructions);
 
           html += `
             <div class="step ultra-step ${isTransit ? 'transit' : 'walk'}">
@@ -515,10 +539,24 @@
             </div>`;
         }
 
+        console.log('Finished building HTML, inserting into DOM...');
         stepsEl.innerHTML = html;
+        console.log('Steps HTML inserted. Total length:', html.length);
+        
+        if (html.length === 0) {
+          stepsEl.innerHTML = `<div class="error-state"><div class="error-icon">⚠️</div><p class="error-title">No steps generated</p><p class="error-subtitle">The route was found but no visual steps were created</p></div>`;
+        }
+        
         document.getElementById('routeProgress').style.display = 'flex';
         document.getElementById('totalSteps').textContent = `of ${leg.steps.length}`;
         showToast('Route loaded!', 'success');
+        
+        setTimeout(() => {
+          const timeline = document.querySelector('.timeline');
+          if (timeline) {
+            timeline.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }, 500);
       });
     }
 
